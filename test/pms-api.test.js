@@ -3,6 +3,7 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { setServicesForTest } from '../api/_lib/pms.js'
+import loginHandler from '../api/pms-login.js'
 import taskHandler from '../api/pms-task.js'
 
 process.env.ALLOWED_ORIGINS = 'https://pms.example.test, http://localhost:5173'
@@ -94,11 +95,33 @@ const task = (body) => call(taskHandler, { token: 'tok-dir', body })
 
 // ----- CORS -----
 test('refuses unknown origins and answers preflight for allowed ones', async () => {
-  assert.equal((await call(taskHandler, { token: 'tok-dir', origin: 'https://evil.test', body: { action: 'list', data: {} } })).status, 403)
-  assert.equal((await call(taskHandler, { token: 'tok-dir', origin: null, body: { action: 'list', data: {} } })).status, 403)
+  assert.equal((await call(loginHandler, { token: 'tok-dir', origin: 'https://evil.test' })).status, 403)
+  assert.equal((await call(loginHandler, { token: 'tok-dir', origin: null })).status, 403)
   const pre = await call(taskHandler, { method: 'OPTIONS', origin: 'http://localhost:5173' })
   assert.equal(pre.status, 204)
   assert.equal(pre.headers['Access-Control-Allow-Origin'], 'http://localhost:5173')
+  // the TMS login page itself (same host) is allowed without being listed
+  assert.equal((await call(loginHandler, { token: 'tok-dir', origin: 'https://tasks.example.test' })).status, 200)
+})
+
+// ----- pms-login -----
+test('login: bad token 401, switched off / no role 403', async () => {
+  assert.equal((await call(loginHandler, { token: 'nope' })).status, 401)
+  assert.equal((await call(loginHandler, {})).status, 401)
+  assert.equal((await call(loginHandler, { token: 'tok-off' })).status, 403)
+  assert.equal((await call(loginHandler, { token: 'tok-norole' })).status, 403)
+})
+
+test('login: creates the profile once and never overwrites role or department', async () => {
+  const r = await call(loginHandler, { token: 'tok-ops' })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.token, 'custom:opsUid:operations')
+  const p = db.store['users/opsUid']
+  assert.equal(p.role, 'employee'); assert.equal(p.departmentId, null); assert.equal(p.pmsRole, 'operations'); assert.equal(p.name, 'Omar Ops')
+  db.store['users/opsUid'] = { ...p, role: 'dept_manager', departmentId: 'operation' }
+  await call(loginHandler, { token: 'tok-ops' })
+  assert.equal(db.store['users/opsUid'].role, 'dept_manager')
+  assert.equal(db.store['users/opsUid'].departmentId, 'operation')
 })
 
 // ----- pms-task create -----
@@ -143,6 +166,8 @@ async function seeded() {
 test('update: assignee may note and complete, others may not; completed moves to DONE', async () => {
   const id = await seeded()
   assert.equal(db.store[`tasks/${id}`].departmentId, 'finance')
+  await call(loginHandler, { token: 'tok-ops' }) // stub becomes a real profile
+  assert.equal(db.store['users/opsUid'].stub, undefined)
   db.store['users/hrUid'] = { role: 'employee' }
   PMS_USERS.hrUid = { role: 'hr', active: true, displayName: 'H' }; TOKENS['tok-hr'] = 'hrUid'
   assert.equal((await call(taskHandler, { token: 'tok-hr', body: { action: 'update', taskId: id, data: { text: 'hi' } } })).status, 403)

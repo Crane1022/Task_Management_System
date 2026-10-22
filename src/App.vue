@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from '@/components/AppSidebar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import ToastHost from '@/components/ToastHost.vue'
@@ -16,6 +16,10 @@ const bare = computed(() => route.meta.public)
 const auth = useAuthStore()
 const theme = useThemeStore()
 watch(() => auth.user, (u) => (u ? theme.start() : theme.stop()), { immediate: true })
+
+// Signed out from elsewhere (the PMS account was switched off, or another tab signed out): back to the login page
+const router = useRouter()
+watch(() => auth.user, (u) => { if (!u && !route.meta.public) router.push('/login') })
 </script>
 
 <template>

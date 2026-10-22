@@ -11,16 +11,24 @@ const activity = (taskId, user, action, detail = '') => ({
   taskId, userId: user.id, userName: user.name, action, detail, createdAt: serverTimestamp(),
 })
 
-// Admins see every task. Everyone else only sees their own department
-// (the same rule is enforced again in firestore.rules).
-export function subscribeBoardTasks({ isAdmin, departmentId }, onData, onError) {
-  const constraints = [where('boardId', '==', BOARD_ID)]
-  if (!isAdmin) constraints.push(where('departmentId', '==', departmentId))
-  return onSnapshot(
-    query(tasksRef, ...constraints),
-    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.position - b.position)),
-    onError,
-  )
+// Admins see every task. Everyone else sees their own department, plus any task they are assigned to
+// (PMS tasks can be assigned across departments). The same rule is enforced again in firestore.rules.
+export function subscribeBoardTasks({ isAdmin, departmentId, uid }, onData, onError) {
+  const sorted = (list) => list.sort((a, b) => a.position - b.position)
+  const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  if (isAdmin) return onSnapshot(query(tasksRef, where('boardId', '==', BOARD_ID)), (snap) => onData(sorted(rows(snap))), onError)
+
+  let dept = null, mine = null // both listeners must answer before the first onData
+  const emit = () => {
+    if (!dept || !mine) return
+    const byId = new Map([...dept, ...mine.filter((t) => t.boardId === BOARD_ID)].map((t) => [t.id, t]))
+    onData(sorted([...byId.values()]))
+  }
+  const stops = [
+    onSnapshot(query(tasksRef, where('boardId', '==', BOARD_ID), where('departmentId', '==', departmentId)), (snap) => { dept = rows(snap); emit() }, onError),
+    onSnapshot(query(tasksRef, where('assignedTo', 'array-contains', uid)), (snap) => { mine = rows(snap); emit() }, onError),
+  ]
+  return () => stops.forEach((s) => s())
 }
 
 export function subscribeActivity(taskId, onData) {

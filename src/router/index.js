@@ -10,6 +10,8 @@ const router = createRouter({
     { path: '/board', name: 'board', component: () => import('@/views/BoardView.vue'), meta: { tasks: true } },
     { path: '/my-tasks', name: 'my-tasks', component: () => import('@/views/BoardView.vue'), props: { mine: true }, meta: { tasks: true } },
     { path: '/list', name: 'list', component: () => import('@/views/ListView.vue'), meta: { tasks: true } },
+    // Super Admin only: departments and roles of PMS staff (accounts themselves are made in the PMS)
+    { path: '/staff', name: 'staff', component: () => import('@/views/StaffView.vue'), meta: { admin: true } },
     { path: '/settings/appearance', name: 'appearance', component: () => import('@/views/AppearanceView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -18,8 +20,10 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   await auth.init()
-  if (!to.meta.public && !auth.user) return { name: 'login' }
-  if (to.meta.public && auth.user) return { name: 'dashboard' }
+  const signedIn = !!(auth.user && auth.profile) // a profile is made by the PMS sign-in (api/pms-login.js)
+  if (!to.meta.public && !signedIn) return { name: 'login' }
+  if (to.meta.public && signedIn) return { name: 'dashboard' }
+  if (to.meta.admin && !auth.isAdmin) return { name: 'dashboard' }
 })
 
 export default router

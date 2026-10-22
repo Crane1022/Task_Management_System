@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette } from 'lucide-vue-next'
+import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { deptName } from '@/utils/constants'
@@ -17,6 +17,7 @@ const links = [
   { to: '/my-tasks', label: 'My Tasks', icon: UserCheck },
 ]
 const accountLinks = [{ to: '/settings/appearance', label: 'Appearance & Theme', icon: Palette }]
+const adminLinks = [{ to: '/staff', label: 'Staff', icon: Users }] // Super Admin only
 const roleLabel = { super_admin: 'Super Admin', dept_manager: 'Department Manager', employee: 'Employee' }
 const initials = computed(() => (auth.profile?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase())
 
@@ -44,6 +45,17 @@ async function signOut() { await auth.logout(); router.push('/login') }
         <component :is="l.icon" class="h-[18px] w-[18px] shrink-0" />
         <span :class="ui.collapsed && 'md:hidden'">{{ l.label }}</span>
       </router-link>
+      <template v-if="auth.isAdmin">
+        <p class="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wide text-muted" :class="ui.collapsed && 'md:hidden'">Admin</p>
+        <router-link
+          v-for="l in adminLinks" :key="l.to" :to="l.to" exact-active-class="bg-accent-soft text-accent"
+          class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-muted hover:bg-bg"
+          :title="l.label" @click="ui.mobileNav = false"
+        >
+          <component :is="l.icon" class="h-[18px] w-[18px] shrink-0" />
+          <span :class="ui.collapsed && 'md:hidden'">{{ l.label }}</span>
+        </router-link>
+      </template>
       <p class="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wide text-muted" :class="ui.collapsed && 'md:hidden'">Account</p>
       <router-link
         v-for="l in accountLinks" :key="l.to" :to="l.to" exact-active-class="bg-accent-soft text-accent"

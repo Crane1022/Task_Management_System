@@ -33,7 +33,7 @@ export const useBoardStore = defineStore('board', () => {
     unsubs = [
       subscribeColumns((c) => { columns.value = c; done('columns') }, fail),
       subscribeBoardTasks(
-        { isAdmin: auth.isAdmin, departmentId: auth.profile.departmentId },
+        { isAdmin: auth.isAdmin, departmentId: auth.profile.departmentId, uid: auth.user.uid },
         (t) => { tasks.value = t; done('tasks') }, fail,
       ),
       subscribeUsers((u) => (users.value = u), () => {}),

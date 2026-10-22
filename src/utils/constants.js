@@ -6,6 +6,7 @@ export const DEPARTMENTS = [
   { id: 'marketing', name: 'Marketing' },
   { id: 'it', name: 'IT' },
   { id: 'sales', name: 'Sales' },
+  { id: 'procurement', name: 'Procurement' },
 ]
 
 export const PRIORITIES = [
@@ -22,7 +23,7 @@ export const DEFAULT_PROJECT_ID = 'general'
 
 export const DEFAULT_COLUMNS = ['NEW PROJECT', 'TODO', 'DOING', 'REVIEW', 'DONE']
 
-export const deptName = (id) => DEPARTMENTS.find((d) => d.id === id)?.name ?? id
+export const deptName = (id) => (id ? DEPARTMENTS.find((d) => d.id === id)?.name ?? id : 'No department')
 export const priorityOf = (id) => PRIORITIES.find((p) => p.id === id) ?? PRIORITIES[1]
 
 export const COLUMN_COLORS = [

@@ -3,30 +3,30 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Leaf } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
-import { DEPARTMENTS } from '@/utils/constants'
 import CatPeek from '@/components/CatPeek.vue'
 
+// Sign in with the Widebed PMS account. There is no sign-up here: accounts are made on the PMS Staff accounts page.
 const auth = useAuthStore()
 const router = useRouter()
-const mode = ref('login')
-const form = ref({ name: '', departmentId: 'operation', email: '', password: '' })
+const form = ref({ email: '', password: '' })
 const busy = ref(false)
 const error = ref('')
 
 const friendly = (e) => ({
   'auth/invalid-credential': 'Email or password is incorrect.',
-  'auth/email-already-in-use': 'This email already has an account. Try signing in.',
-  'auth/weak-password': 'Use a password with at least 6 characters.',
   'auth/invalid-email': 'Enter a valid email address.',
+  'auth/user-disabled': 'This PMS account is disabled. Ask a Director.',
+  'auth/too-many-requests': 'Too many attempts. Wait a few minutes and try again.',
+  'bridge/refused': 'Your PMS account is switched off or has no role. Ask a Director.',
+  'bridge/offline': 'The task system could not be reached. Check your connection and try again.',
+  'bridge/failed': 'Signed in to the PMS, but the task system could not finish signing you in. Please try again.',
 }[e.code] ?? 'Something went wrong. Please try again.')
 
 async function submit() {
   busy.value = true
   error.value = ''
   try {
-    const f = form.value
-    if (mode.value === 'login') await auth.login(f.email, f.password)
-    else await auth.register(f.name.trim(), f.departmentId, f.email, f.password)
+    await auth.login(form.value.email.trim(), form.value.password)
     router.push('/')
   } catch (e) {
     error.value = friendly(e)
@@ -44,27 +44,17 @@ async function submit() {
         <div class="grid h-9 w-9 place-items-center rounded-lg bg-accent font-extrabold text-on-primary"><Leaf class="h-5 w-5" /></div>
         <h1 class="text-lg font-extrabold">Widebed Tasks</h1>
       </div>
-      <h2 class="text-base font-bold">{{ mode === 'login' ? 'Sign in' : 'Create your account' }}</h2>
+      <h2 class="text-base font-bold">Sign in</h2>
+      <p class="mt-1 text-sm text-muted">Use your Widebed PMS email and password.</p>
 
       <div class="mt-4 space-y-3">
-        <template v-if="mode === 'register'">
-          <div><label class="label" for="name">Full name</label><input id="name" v-model="form.name" class="input" required /></div>
-          <div>
-            <label class="label" for="dept">Department</label>
-            <select id="dept" v-model="form.departmentId" class="input">
-              <option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ d.name }}</option>
-            </select>
-          </div>
-        </template>
         <div><label class="label" for="email">Email</label><input id="email" v-model="form.email" type="email" class="input" autocomplete="email" required /></div>
         <div><label class="label" for="pw">Password</label><input id="pw" v-model="form.password" type="password" class="input" autocomplete="current-password" required /></div>
       </div>
 
       <p v-if="error" class="mt-3 text-sm font-semibold text-red-600" role="alert">{{ error }}</p>
-      <button class="btn-primary mt-5 w-full" :disabled="busy">{{ busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account' }}</button>
-      <button type="button" class="mt-3 w-full text-sm font-semibold text-accent" @click="mode = mode === 'login' ? 'register' : 'login'; error = ''">
-        {{ mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in' }}
-      </button>
+      <button class="btn-primary mt-5 w-full" :disabled="busy">{{ busy ? 'Please wait…' : 'Sign in' }}</button>
+      <p class="mt-3 text-center text-xs text-muted">No account? Ask a Director to add you on the PMS Staff accounts page.</p>
     </form>
   </div>
 </template>

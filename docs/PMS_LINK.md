@@ -1,12 +1,13 @@
 # Link with the Widebed PMS
 
-The Task Management System (TMS) and the Widebed PMS are two separate Firebase projects. Neither reads the other's database. One Vercel function, `api/pms-task.js`, lets the PMS read and update tasks here. It checks the caller's **PMS ID token** with `firebase-admin`, using only the PMS project ID (`widebed-pmsdashboard`), then reads the caller's PMS staff record `users/{uid}` (role, active) from the PMS REST API with the caller's own token. No PMS key is needed and none is shared.
-
-This adds new files only (`api/`, `test/`, this doc) plus three setup lines: `firebase-admin` in `package.json` (and its lock file), and `vercel.json` now skips `/api/` in its rewrite so the function isn't sent to the app. **Nothing in the TMS app (`src/`), its login or its rules is changed.** Board users and PMS staff are separate accounts; the PMS identifies people by their PMS uid.
+The Task Management System (TMS) and the Widebed PMS are two separate Firebase projects. Neither reads the other's database. Two Vercel functions in `api/` connect them. Both check the caller's **PMS ID token** with `firebase-admin`, using only the PMS project ID (`widebed-pmsdashboard`). They then read the caller's PMS staff record `users/{uid}` (role, active) from the PMS REST API, using the caller's own token. No PMS key is needed and none is shared.
 
 | Function | Called by | What it does |
 |---|---|---|
-| `POST /api/pms-task` | the PMS (`src/lib/tms.js` there) | `create`, `update`, `list`, `inbox`, `link` (below) |
+| `POST /api/pms-login` | the TMS login page | Takes a PMS ID token and returns a TMS custom token for the **same uid**. On the first sign-in it creates `users/{uid}` (`employee`, no department, `pmsRole`). It never overwrites role or department. |
+| `POST /api/pms-task` | the PMS (`src/lib/tms.js` there) | `create` (Directors only), `update` (Director, an assignee or same-department Procurement: note, completed, checklist ticks or full checklist sync), `list` (by `pmsLink`), `inbox` (unlinked tasks of a department), `link` (point a board task at a PMS record) |
+
+Staff sign in here with their **PMS email and password**. There is no sign-up. Accounts are made on the PMS Staff accounts page, and a Super Admin sets department and role on the **Staff** page here. Someone switched off in the PMS is refused at sign-in. A signed-in tab re-checks every 30 minutes and on each load, so they are signed out within half an hour.
 
 ## Messages (`/api/pms-task`)
 
@@ -28,24 +29,26 @@ Errors come back as `{ error }` with status 400 (bad input), 401 (not a PMS logi
 
 ## Environment variables (Vercel > Project > Settings > Environment Variables)
 
-| Variable | Value |
-|---|---|
-| `TMS_SERVICE_ACCOUNT` | the whole service account JSON of **this TMS project** (Firebase console > Project settings > Service accounts > Generate new private key), pasted as one value. **Never** in Git, chat or email. |
-| `ALLOWED_ORIGINS` | the PMS site address(es), comma separated, e.g. `https://<pms-domain>,http://localhost:5173` |
-| `PMS_PROJECT_ID` | optional, defaults to `widebed-pmsdashboard` |
+| Variable | Where | Value |
+|---|---|---|
+| `VITE_FIREBASE_*` | build | as before (this TMS project) |
+| `VITE_PMS_API_KEY`, `VITE_PMS_AUTH_DOMAIN`, `VITE_PMS_PROJECT_ID`, `VITE_PMS_MESSAGING_SENDER_ID`, `VITE_PMS_APP_ID` | build | the PMS web config, already in `.env.example` (public, not a secret) |
+| `TMS_SERVICE_ACCOUNT` | functions | the whole service account JSON of **this TMS project** (Firebase console > Project settings > Service accounts > Generate new private key), pasted as one value. **Never** in Git, chat or email. |
+| `ALLOWED_ORIGINS` | functions | the PMS site address(es), comma separated, e.g. `https://<pms-domain>,http://localhost:5173`. The TMS's own address is always allowed. |
+| `PMS_PROJECT_ID` | functions | optional, defaults to `widebed-pmsdashboard` |
 
-Redeploy after changing them.
+Redeploy after changing them. The `VITE_*` values are baked in at build time.
 
 ## What the TMS owner must do
 
-1. Add the variables above in Vercel and redeploy (a preview deploy of this branch first is ideal, so the PMS team can test).
-2. Send the PMS team the endpoint address: `https://<tms-domain>/api/pms-task`.
-3. Requests (your call, not part of this branch):
-   - Add a **Procurement** department to `DEPARTMENTS` in `src/utils/constants.js` (id `procurement`), so Procurement tasks can be made on the board and show in the PMS inbox. The function already accepts it.
-   - Let any active PMS staff use `create` (now Directors only), so Procurement can send the Marketing task.
-4. Note: `create` makes a placeholder `users/{uid}` profile (`stub: true`) for a PMS assignee who isn't on the board yet, so the card can show a name.
-5. Vercel plan: the free Hobby plan is for non-commercial use only. A company system may need **Pro**.
+1. Add the variables above in Vercel and redeploy.
+2. Publish the new `firestore.rules` (Firestore > Rules). Browsers can no longer create `users` profiles; only `api/pms-login.js` does that.
+3. Sign in with your PMS account, then in Firestore set `users/<your PMS uid>.role` to `super_admin` once. After that, use the **Staff** page.
+4. Optional: turn off the **Email/Password** provider in this TMS project's Authentication. Sign-in now uses custom tokens, so it isn't needed.
+5. Accounts made by the old self sign-up have different uids from the PMS ones. Their old tasks still point at the old uids, so reassign those tasks (or remove the old `users` docs) once people have signed in with their PMS accounts.
+6. Vercel plan: the free Hobby plan is for non-commercial use only. A company system may need **Pro**.
+7. Send the PMS team the endpoint address: `https://<tms-domain>/api/pms-task`.
 
 ## Tests
 
-`npm test` runs `test/pms-api.test.js`. It drives the handler against an in-memory Firestore and a fake PMS REST API, with no network or project needed.
+`npm test` runs `test/pms-api.test.js`. It drives both handlers against an in-memory Firestore and a fake PMS REST API, with no network or project needed.

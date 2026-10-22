@@ -2,7 +2,7 @@
 // To upgrade, change the version number in the four URLs below.
 export { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
 export {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithCustomToken, signOut,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
 export {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, writeBatch,

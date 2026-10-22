@@ -11,15 +11,19 @@ service cloud.firestore {
     function myDept() { return profile().departmentId; }
     function inMyDept(dept) { return hasProfile() && myDept() == dept; }
 
-    // ---------- users (shared with the Widebed Dashboard) ----------
+    // ---------- users ----------
+    // Staff sign in with their PMS account. Profiles are created only by the sign-in function
+    // (api/pms-login.js, Admin SDK, which skips these rules), so browsers can never create one.
     match /users/{uid} {
       allow read: if signedIn();
-      // Self sign-up may only create an 'employee'. Promote people in the console or via a Super Admin.
-      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'employee';
-      allow update: if isAdmin()
+      allow create: if false;
+      // A Super Admin sets department and role (Staff page), but can't change their own role (no lock-out).
+      allow update: if (isAdmin()
+          && request.resource.data.role in ['super_admin', 'dept_manager', 'employee']
+          && (uid != request.auth.uid || request.resource.data.role == resource.data.role))
+        // Anyone else may only touch harmless fields of their own profile
         || (signedIn() && request.auth.uid == uid
-            && request.resource.data.role == resource.data.role
-            && request.resource.data.departmentId == resource.data.departmentId);
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'departmentId', 'pmsRole', 'email', 'stub']));
       allow delete: if isAdmin();
     }
 

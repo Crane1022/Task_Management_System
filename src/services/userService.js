@@ -1,23 +1,15 @@
-import { collection, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from '@/firebase/sdk'
+import { collection, doc, getDoc, updateDoc, onSnapshot } from '@/firebase/sdk'
 import { db } from '@/firebase/config'
-import { ROLES } from '@/utils/constants'
 
-// Employee identity = Firebase Auth UID. The Widebed Dashboard reads the same `users` collection.
-export async function loadOrCreateProfile(firebaseUser, signup = {}) {
-  const ref = doc(db, 'users', firebaseUser.uid)
-  const snap = await getDoc(ref)
-  if (snap.exists()) return { id: snap.id, ...snap.data() }
-
-  const profile = {
-    name: signup.name || firebaseUser.displayName || firebaseUser.email.split('@')[0],
-    email: firebaseUser.email,
-    role: ROLES.EMPLOYEE, // security rules only allow 'employee' on self-create
-    departmentId: signup.departmentId || 'operation',
-    createdAt: serverTimestamp(),
-  }
-  await setDoc(ref, profile)
-  return { id: firebaseUser.uid, ...profile }
+// Employee identity = the Widebed PMS uid (staff sign in with their PMS account, see docs/PMS_LINK.md).
+// Profiles are created by the sign-in function (api/pms-login.js), never by the browser.
+export async function loadProfile(firebaseUser) {
+  const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
+
+// Super Admin only (firestore.rules): department and role, from the Staff page
+export const updateUser = (uid, changes) => updateDoc(doc(db, 'users', uid), changes)
 
 export function subscribeUsers(onData, onError) {
   return onSnapshot(
