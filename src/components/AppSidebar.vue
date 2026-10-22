@@ -17,8 +17,8 @@ const links = [
   { to: '/my-tasks', label: 'My Tasks', icon: UserCheck },
 ]
 const accountLinks = [{ to: '/settings/appearance', label: 'Appearance & Theme', icon: Palette }]
-const adminLinks = [{ to: '/staff', label: 'Staff', icon: Users }] // Super Admin only
-const roleLabel = { super_admin: 'Super Admin', dept_manager: 'Department Manager', employee: 'Employee' }
+const adminLinks = [{ to: '/staff', label: 'Staff', icon: Users }] // Director (super_admin) only
+const roleLabel = { super_admin: 'Director', dept_manager: 'Department Manager', employee: 'Employee' }
 const initials = computed(() => (auth.profile?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase())
 
 async function signOut() { await auth.logout(); router.push('/login') }

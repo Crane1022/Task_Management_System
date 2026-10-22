@@ -91,7 +91,7 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
           <p class="mt-1 text-sm text-muted">Start with the standard set: NEW PROJECT, TODO, DOING, REVIEW and DONE.</p>
           <button class="btn-primary mt-4" @click="board.seedColumns()">Create default columns</button>
         </template>
-        <p v-else class="mt-1 text-sm text-muted">Ask a Super Admin or Department Manager to set up the board.</p>
+        <p v-else class="mt-1 text-sm text-muted">Ask a Director or Department Manager to set up the board.</p>
       </div>
     </div>
 

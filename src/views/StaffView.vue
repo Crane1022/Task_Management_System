@@ -6,7 +6,7 @@ import { useUiStore } from '@/stores/ui'
 import { subscribeUsers, updateUser } from '@/services/userService'
 import { DEPARTMENTS, ROLES } from '@/utils/constants'
 
-// Super Admin: set each person's department and role here. Accounts are not made here:
+// Director (super_admin): set each person's department and role here. Accounts are not made here:
 // they are made on the PMS Staff accounts page, and people appear after their first sign-in
 // (or once a Director assigns them a task from the PMS).
 const auth = useAuthStore()
@@ -18,7 +18,7 @@ const saving = ref('')
 const search = ref('')
 
 const ROLE_OPTIONS = [
-  { id: ROLES.SUPER_ADMIN, name: 'Super Admin' },
+  { id: ROLES.SUPER_ADMIN, name: 'Director' },
   { id: ROLES.MANAGER, name: 'Department Manager' },
   { id: ROLES.EMPLOYEE, name: 'Employee' },
 ]
@@ -88,7 +88,7 @@ async function change(u, field, value) {
                 </select>
               </td>
               <td class="rounded-r-xl border-y border-r border-line bg-surface px-3 py-1.5">
-                <!-- You can't change your own role, so there is always a Super Admin -->
+                <!-- You can't change your own role, so there is always a Director -->
                 <select :value="u.role" class="input w-48" :disabled="saving === u.id || u.id === auth.user.uid" :aria-label="`Role of ${u.name}`" @change="change(u, 'role', $event.target.value)">
                   <option v-for="r in ROLE_OPTIONS" :key="r.id" :value="r.id">{{ r.name }}</option>
                 </select>

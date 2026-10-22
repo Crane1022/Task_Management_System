@@ -9,7 +9,7 @@ export default handle(async (req) => {
   const { db, tmsAuth, FieldValue } = getServices()
 
   // The TMS profile users/{uid}. Created here (the only place: browsers can't create profiles), never
-  // overwriting role or departmentId, which a Super Admin sets on the Staff page.
+  // overwriting role or departmentId, which a Director sets on the Staff page.
   const ref = db.collection('users').doc(me.uid)
   const snap = await ref.get()
   const now = FieldValue.serverTimestamp()

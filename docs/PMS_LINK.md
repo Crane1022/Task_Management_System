@@ -7,7 +7,7 @@ The Task Management System (TMS) and the Widebed PMS are two separate Firebase p
 | `POST /api/pms-login` | the TMS login page | Takes a PMS ID token and returns a TMS custom token for the **same uid**. On the first sign-in it creates `users/{uid}` (`employee`, no department, `pmsRole`). It never overwrites role or department. |
 | `POST /api/pms-task` | the PMS (`src/lib/tms.js` there) | `create` (Directors only), `update` (Director, an assignee or same-department Procurement: note, completed, checklist ticks or full checklist sync), `list` (by `pmsLink`), `inbox` (unlinked tasks of a department), `link` (point a board task at a PMS record) |
 
-Staff sign in here with their **PMS email and password**. There is no sign-up. Accounts are made on the PMS Staff accounts page, and a Super Admin sets department and role on the **Staff** page here. Someone switched off in the PMS is refused at sign-in. A signed-in tab re-checks every 30 minutes and on each load, so they are signed out within half an hour.
+Staff sign in here with their **PMS email and password**. There is no sign-up. Accounts are made on the PMS Staff accounts page, and a Director (role super_admin) sets department and role on the **Staff** page here. Someone switched off in the PMS is refused at sign-in. A signed-in tab re-checks every 30 minutes and on each load, so they are signed out within half an hour.
 
 ## Messages (`/api/pms-task`)
 

@@ -8,7 +8,7 @@ export async function loadProfile(firebaseUser) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-// Super Admin only (firestore.rules): department and role, from the Staff page
+// Director (super_admin) only (firestore.rules): department and role, from the Staff page
 export const updateUser = (uid, changes) => updateDoc(doc(db, 'users', uid), changes)
 
 export function subscribeUsers(onData, onError) {

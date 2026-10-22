@@ -10,7 +10,7 @@ const router = createRouter({
     { path: '/board', name: 'board', component: () => import('@/views/BoardView.vue'), meta: { tasks: true } },
     { path: '/my-tasks', name: 'my-tasks', component: () => import('@/views/BoardView.vue'), props: { mine: true }, meta: { tasks: true } },
     { path: '/list', name: 'list', component: () => import('@/views/ListView.vue'), meta: { tasks: true } },
-    // Super Admin only: departments and roles of PMS staff (accounts themselves are made in the PMS)
+    // Director (super_admin) only: departments and roles of PMS staff (accounts themselves are made in the PMS)
     { path: '/staff', name: 'staff', component: () => import('@/views/StaffView.vue'), meta: { admin: true } },
     { path: '/settings/appearance', name: 'appearance', component: () => import('@/views/AppearanceView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
