@@ -1,0 +1,189 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isAdmin() { return hasProfile() && profile().role == 'super_admin'; }
+    function isManager() { return hasProfile() && profile().role == 'dept_manager'; }
+    function myDept() { return profile().departmentId; }
+    function inMyDept(dept) { return hasProfile() && myDept() == dept; }
+
+    // ---------- helpers: workspaces and boards ----------
+    // A board WITHOUT a board document (today: "main", also used by the PMS link) keeps the original department
+    // rules below. A board WITH a document is a workspace board: access comes from workspace membership.
+    function wsPath(wid) { return /databases/$(database)/documents/workspaces/$(wid); }
+    function boardPath(bid) { return /databases/$(database)/documents/boards/$(bid); }
+    function boardExists(bid) { return exists(boardPath(bid)); }
+    // 'admin' | 'member' | 'viewer' | 'none'
+    function wsRole(wid) { return get(wsPath(wid)).data.members.get(request.auth.uid, 'none'); }
+    // A Director is admin everywhere; a workspace admin is admin on every board of the workspace;
+    // otherwise the board's own role for the person (set by a board admin) or their workspace role.
+    function boardRole(bid) {
+      let b = get(boardPath(bid)).data;
+      let r = wsRole(b.workspaceId);
+      return isAdmin() ? 'admin'
+        : (r == 'none' ? 'none'
+        : (r == 'admin' ? 'admin'
+        : b.get('members', {}).get(request.auth.uid, r)));
+    }
+    function membersOk(w) {
+      return w.members.keys().toSet() == w.memberIds.toSet()
+        && w.members.values().hasOnly(['admin', 'member', 'viewer']);
+    }
+    function hasAdmin(w) { return w.members.values().hasAny(['admin']); }
+    function nameOk(d) { return d.name is string && d.name.size() > 0 && d.name.size() <= 80; }
+    // Fields only a Director may change on a task (who created it, which board, where it came from in the PMS)
+    function changesLockedTaskField() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['boardId', 'createdBy', 'createdByName', 'pmsLink', 'pmsKey', 'source']);
+    }
+
+    // ---------- users ----------
+    // Staff sign in with their PMS account. Profiles are created only by the sign-in function
+    // (api/pms-login.js, Admin SDK, which skips these rules), so browsers can never create one.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if false;
+      // A Super Admin sets department, role, employee ID and job position (Staff page), but can't change their own role (no lock-out).
+      allow update: if (isAdmin()
+          && request.resource.data.role in ['super_admin', 'dept_manager', 'employee']
+          && (uid != request.auth.uid || request.resource.data.role == resource.data.role))
+        // Everyone else may change ONLY these fields of their own profile (an allow-list, so company-controlled
+        // fields such as role, department, employee ID and job position can never be self-edited)
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photo', 'timezone', 'landingPage'])
+            && request.resource.data.get('displayName', '').size() <= 60
+            && request.resource.data.get('timezone', '').size() <= 60
+            && request.resource.data.get('photo', '').size() < 40000
+            && request.resource.data.get('landingPage', 'dashboard') in ['dashboard', 'board', 'list', 'my-tasks']);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- board columns ----------
+    match /columns/{id} {
+      allow read: if signedIn()
+        && (!boardExists(resource.data.boardId) || boardRole(resource.data.boardId) != 'none');
+      allow create: if hasProfile() && (
+        (boardExists(request.resource.data.boardId) && boardRole(request.resource.data.boardId) == 'admin')
+        || (!boardExists(request.resource.data.boardId) && (isAdmin() || isManager())));
+      allow update: if hasProfile() && request.resource.data.boardId == resource.data.boardId && (
+        (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) == 'admin')
+        || (!boardExists(resource.data.boardId) && (isAdmin() || isManager())));
+      // Original board: only a Super Admin (they can see, and so move, the tasks of every department).
+      // Workspace board: a board admin, who can see every task on it.
+      allow delete: if hasProfile() && (
+        (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) == 'admin')
+        || (!boardExists(resource.data.boardId) && isAdmin()));
+    }
+
+    // ---------- tasks ----------
+    match /tasks/{id} {
+      // Unchanged for the original board: a Director, the same department, or an assignee.
+      // Workspace board: any member of the workspace (a viewer too).
+      allow read: if signedIn() && (isAdmin()
+        || request.auth.uid in resource.data.assignedTo
+        || (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) != 'none')
+        || (!boardExists(resource.data.boardId) && inMyDept(resource.data.departmentId)));
+
+      allow create: if hasProfile()
+        && request.resource.data.createdBy == request.auth.uid
+        && (isAdmin() || !request.resource.data.keys().hasAny(['pmsLink', 'pmsKey', 'source']))
+        && (
+          (boardExists(request.resource.data.boardId) && boardRole(request.resource.data.boardId) in ['admin', 'member'])
+          || (!boardExists(request.resource.data.boardId) && (isAdmin() || inMyDept(request.resource.data.departmentId))));
+
+      allow update: if hasProfile() && (isAdmin() || !changesLockedTaskField()) && (
+        (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) in ['admin', 'member'])
+        || (!boardExists(resource.data.boardId) && (
+          isAdmin()
+          || (isManager() && inMyDept(resource.data.departmentId) && inMyDept(request.resource.data.departmentId))
+          || (inMyDept(resource.data.departmentId)
+              && request.resource.data.departmentId == resource.data.departmentId
+              && (request.auth.uid in resource.data.assignedTo || resource.data.createdBy == request.auth.uid)))));
+
+      allow delete: if hasProfile() && (
+        (boardExists(resource.data.boardId) && (boardRole(resource.data.boardId) == 'admin'
+          || (boardRole(resource.data.boardId) == 'member' && resource.data.createdBy == request.auth.uid)))
+        || (!boardExists(resource.data.boardId) && (
+          isAdmin()
+          || (isManager() && inMyDept(resource.data.departmentId))
+          || resource.data.createdBy == request.auth.uid)));
+    }
+
+    // ---------- workspaces: members (uid -> role) live on the workspace document ----------
+    match /workspaces/{wid} {
+      allow read: if signedIn() && (isAdmin() || request.auth.uid in resource.data.memberIds);
+      // Directors and Department Managers create workspaces; the creator must be an admin of it
+      allow create: if hasProfile() && (isAdmin() || isManager())
+        && request.resource.data.createdBy == request.auth.uid
+        && nameOk(request.resource.data)
+        && membersOk(request.resource.data) && hasAdmin(request.resource.data)
+        && (isAdmin() || request.resource.data.members.get(request.auth.uid, 'none') == 'admin');
+      allow update: if hasProfile()
+        && (isAdmin() || resource.data.members.get(request.auth.uid, 'none') == 'admin')
+        && request.resource.data.createdBy == resource.data.createdBy
+        && nameOk(request.resource.data)
+        && membersOk(request.resource.data) && hasAdmin(request.resource.data);
+      // Workspaces are archived, not deleted (only a Director can remove the document)
+      allow delete: if isAdmin();
+    }
+
+    // ---------- boards ----------
+    match /boards/{bid} {
+      // resource == null: asking whether a board document exists (for "main" it does not, yet)
+      allow read: if signedIn() && (resource == null || isAdmin() || wsRole(resource.data.workspaceId) != 'none');
+      // Workspace admins create boards. Only a Director may put the original board "main" into a workspace.
+      allow create: if hasProfile()
+        && request.resource.data.createdBy == request.auth.uid
+        && nameOk(request.resource.data)
+        && (bid != 'main' || isAdmin())
+        && (isAdmin() || wsRole(request.resource.data.workspaceId) == 'admin');
+      // Workspace admins and board admins (a board-level role) manage the board and its members
+      allow update: if hasProfile()
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && nameOk(request.resource.data)
+        && (isAdmin()
+            || wsRole(resource.data.workspaceId) == 'admin'
+            || resource.data.get('members', {}).get(request.auth.uid, 'none') == 'admin');
+      allow delete: if hasProfile() && (isAdmin() || wsRole(resource.data.workspaceId) == 'admin');
+    }
+
+    // ---------- activity log: append-only ----------
+    match /task_activities/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---------- appearance settings: private to their owner ----------
+    match /users/{uid}/settings/{docId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- background images (small, already shrunk): private to their owner ----------
+    match /users/{uid}/backgrounds/{imageId} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 900000;
+    }
+
+    // ---------- dashboards: private to their owner ----------
+    match /dashboards/{id} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ---------- reserved for the next phases ----------
+    match /{collection}/{id} {
+      allow read, write: if false;
+    }
+  }
+}
