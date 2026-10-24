@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound } from 'lucide-vue-next'
+import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound, PawPrint } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -39,6 +39,7 @@ const links = [
 const accountLinks = [
   { to: '/settings/profile', label: 'Profile & settings', icon: UserRound },
   { to: '/settings/appearance', label: 'Appearance & Theme', icon: Palette },
+  { to: '/settings/companion', label: 'My companion', icon: PawPrint },
 ]
 const adminLinks = [{ to: '/staff', label: 'Staff', icon: Users }] // Director (super_admin) only
 const roleLabel = { super_admin: 'Director', dept_manager: 'Department Manager', employee: 'Employee' }

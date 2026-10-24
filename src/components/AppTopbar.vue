@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search, Plus, Sun, Moon, Menu, UserRound, Palette, LogOut } from 'lucide-vue-next'
+import { Search, Plus, Sun, Moon, Menu, UserRound, Palette, LogOut, PawPrint } from 'lucide-vue-next'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { useUiStore } from '@/stores/ui'
 import { useBoardStore } from '@/stores/board'
@@ -53,6 +53,7 @@ async function signOut() { menu.value = false; await auth.logout(); router.push(
           </div>
           <router-link to="/settings/profile" class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold hover:bg-bg" @click="menu = false"><UserRound class="h-4 w-4" />Profile and settings</router-link>
           <router-link to="/settings/appearance" class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold hover:bg-bg" @click="menu = false"><Palette class="h-4 w-4" />Appearance and theme</router-link>
+          <router-link to="/settings/companion" class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold hover:bg-bg" @click="menu = false"><PawPrint class="h-4 w-4" />My companion</router-link>
           <button class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-red-600 hover:bg-bg" @click="signOut"><LogOut class="h-4 w-4" />Sign out</button>
         </div>
       </template>

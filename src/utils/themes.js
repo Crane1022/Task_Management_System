@@ -104,6 +104,7 @@ export const PAGES = [
   { key: 'list', name: 'List' },
   { key: 'workspace', name: 'Workspaces' },
   { key: 'profile', name: 'Profile & settings' },
+  { key: 'companion', name: 'My companion' },
   { key: 'appearance', name: 'Appearance & Theme' },
 ]
 export const pageName = (key) => PAGES.find((p) => p.key === key)?.name ?? key

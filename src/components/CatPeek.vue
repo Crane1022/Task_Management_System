@@ -1,19 +1,18 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
+import { SKINS } from '@/companions/catSkins'
+import { useCompanionStore } from '@/stores/companion'
 
 // A small cat that peeks over the top edge of its parent (parent must be `relative`).
 // Hover (or tap on phones) and it pops up, twitches its ears and says something.
 const props = defineProps({ variant: { type: String, default: 'orange' }, side: { type: String, default: 'right' } })
 
-const SKINS = {
-  orange: { fur: '#e8a15b', ear: '#f4c9a0', mark: '#c97d35', eye: '#2b2b2b', msg: 'mew!' },
-  gray: { fur: '#a9b0b8', ear: '#e0c4c8', mark: '#868e97', eye: '#2b2b2b', msg: 'purr…' },
-  black: { fur: '#3a3d42', ear: '#9a7681', mark: '#2a2c30', eye: '#f6e27a', msg: 'nya~' },
-  white: { fur: '#f4f1ea', ear: '#f2c9cf', mark: '#dcd6c8', eye: '#2b2b2b', msg: 'hi hi!' },
-  calico: { fur: '#f2eee6', ear: '#f2c9cf', mark: '#d9894a', eye: '#2b2b2b', msg: 'meow!' },
-}
 const skin = computed(() => SKINS[props.variant] ?? SKINS.orange)
 const stripes = computed(() => ['orange', 'gray'].includes(props.variant))
+
+// a person can switch the peeking cats off in My companion (they are on by default, as before)
+const companion = useCompanionStore()
+const show = computed(() => companion.settings.behaviour.peekCats)
 
 const active = ref(false)
 let timer
@@ -25,7 +24,7 @@ onUnmounted(() => clearTimeout(timer))
 
 <template>
   <div
-    class="absolute -top-[26px] z-10 h-[26px] w-12" :class="side === 'left' ? 'left-4' : 'right-4'" aria-hidden="true"
+    v-if="show" class="absolute -top-[26px] z-10 h-[26px] w-12" :class="side === 'left' ? 'left-4' : 'right-4'" aria-hidden="true"
     @mouseenter="pop" @mouseleave="hide" @click.stop="tap"
   >
     <span

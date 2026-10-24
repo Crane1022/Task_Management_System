@@ -19,6 +19,7 @@ const router = createRouter({
     // Director (super_admin) only: departments and roles of PMS staff (accounts themselves are made in the PMS)
     { path: '/staff', name: 'staff', component: () => import('@/views/StaffView.vue'), meta: { admin: true } },
     { path: '/settings/profile', name: 'profile', component: () => import('@/views/ProfileView.vue') },
+    { path: '/settings/companion', name: 'companion', component: () => import('@/views/CompanionView.vue') },
     { path: '/settings/appearance', name: 'appearance', component: () => import('@/views/AppearanceView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

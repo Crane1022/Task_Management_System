@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
+import { useCompanionStore } from './companion'
 import { subscribeColumns, createColumn, renameColumn, deleteColumn, seedDefaultColumns, updateColumn, reorderColumns } from '@/services/columnService'
 import { subscribeBoardTasks, createTask, updateTask, moveTask, deleteTask, moveAllTasks } from '@/services/taskService'
 import { subscribeUsers } from '@/services/userService'
@@ -16,6 +17,7 @@ import { BOARD_ID } from '@/utils/constants'
 export const useBoardStore = defineStore('board', () => {
   const auth = useAuthStore()
   const ui = useUiStore()
+  const companion = useCompanionStore()
 
   const boardId = ref(BOARD_ID)
   const boardDoc = ref(null) // null = original board, or not resolved yet
@@ -164,12 +166,14 @@ export const useBoardStore = defineStore('board', () => {
     const column = columns.value.find((c) => c.id === columnId)
     await createTask(data, column, endPosition(columnId), auth.profile)
     ui.toast('Task created')
+    companion.react('created')
   }, 'Could not create task')
 
   const saveTask = (task, changes, notes) => run(async () => {
     const column = columns.value.find((c) => c.id === changes.columnId)
     if (column) { // moved from the status dropdown
       await moveTask(task, column, endPosition(column.id), auth.profile)
+      if (column.isDone && task.columnId !== column.id) companion.react('completed')
       delete changes.columnId
     }
     if (Object.keys(changes).length) await updateTask(task.id, changes, notes, auth.profile)
@@ -189,6 +193,7 @@ export const useBoardStore = defineStore('board', () => {
     const position = positionBetween(prev?.position, next?.position)
     if (task.columnId === columnId && task.position === position) return
     await moveTask(task, column, position, auth.profile)
+    if (column.isDone && task.columnId !== columnId) companion.react('completed') // a card dropped into a completed column
   }, 'Could not move task', resetTasks)
 
   // ----- columns -----

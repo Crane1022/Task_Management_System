@@ -9,6 +9,8 @@ import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useCompanionStore } from '@/stores/companion'
+import PetCompanion from '@/components/PetCompanion.vue'
 import { setDisplayTimeZone } from '@/utils/dates'
 
 const route = useRoute()
@@ -18,6 +20,9 @@ const bare = computed(() => route.meta.public)
 const auth = useAuthStore()
 const theme = useThemeStore()
 const workspaces = useWorkspaceStore()
+const companion = useCompanionStore()
+// each person's virtual pet loads (and is cleared) with them, so nobody sees someone else's
+watch(() => auth.user, (u) => (u ? companion.start() : companion.stop()), { immediate: true })
 watch(() => auth.user, (u) => (u ? theme.start() : theme.stop()), { immediate: true })
 // Workspaces and boards follow the person (and restart if a Director changes their role, which changes what they may list)
 watch(() => [auth.user, auth.isAdmin], ([u]) => (u ? workspaces.start() : workspaces.stop()), { immediate: true })
@@ -39,5 +44,6 @@ watch(() => auth.user, (u) => { if (!u && !route.meta.public) router.push('/logi
       <main class="min-h-0 flex-1 overflow-hidden"><router-view :key="route.fullPath" /></main>
     </div>
   </div>
+  <PetCompanion v-if="!bare && auth.user" />
   <ToastHost />
 </template>
