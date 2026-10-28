@@ -35,9 +35,9 @@ const names = (t) => (t.assignedTo ?? []).map((id) => displayOf(board.users[id])
       <BoardPicker />
       <FilterBar />
       <TaskToolbar />
-      <select v-model="sort" class="input w-44" aria-label="Sort tasks">
+      <!-- <select v-model="sort" class="input w-44" aria-label="Sort tasks">
         <option value="due">Sort: deadline</option><option value="priority">Sort: priority</option><option value="new">Sort: newest</option>
-      </select>
+      </select> -->
     </div>
 
     <div v-if="board.loading" class="space-y-2 px-4 pt-2"><div v-for="n in 6" :key="n" class="skeleton h-12" /></div>
