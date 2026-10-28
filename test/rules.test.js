@@ -45,6 +45,13 @@ test('firestore.rules', { skip }, async (t) => {
   await t.test('original board: an assignee cannot change who created the task', async () => {
     await assertFails(updateDoc(doc(as('it1'), 'tasks', 'legacy1'), { createdBy: 'it1x' }))
     await assertSucceeds(updateDoc(doc(as('it1'), 'tasks', 'legacy1'), { title: 'renamed' }))
+    // anyone with a profile may reorder the columns of the original board (position only), but not rename them
+    await assertSucceeds(updateDoc(doc(as('hr1'), 'columns', 'legacyCol'), { position: 3000 }))
+    await assertFails(updateDoc(doc(as('hr1'), 'columns', 'legacyCol'), { name: 'X' }))
+    // every role that can see a card on the original board may drag it, but not edit it
+    await assertSucceeds(updateDoc(doc(as('hr1'), 'tasks', 'legacy1'), { columnId: 'c2', status: 'DOING', position: 2000, completedAt: null, updatedAt: new Date() })) // hr1 is an assignee here
+    await assertFails(updateDoc(doc(as('hr1'), 'tasks', 'legacy1'), { title: 'sneaky' }))
+    await assertFails(updateDoc(doc(as('hr1'), 'tasks', 'legacy1'), { columnId: 'c3', departmentId: 'hr' }))
   })
   await t.test('users: only the allow-listed fields can be edited by the person', async () => {
     await assertSucceeds(updateDoc(doc(as('it1'), 'users', 'it1'), { displayName: 'Ana' }))

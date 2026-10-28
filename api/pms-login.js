@@ -9,18 +9,22 @@ export default handle(async (req) => {
   const { db, tmsAuth, FieldValue } = getServices()
 
   // The TMS profile users/{uid}. Created here (the only place: browsers can't create profiles), never
-  // overwriting role, which a Director sets on the Staff page. The department follows the PMS role.
+  // overwriting the role a Director set on the Staff page. The department follows the PMS role.
+  // A PMS Director is a Director here too (role super_admin: every function the same). They are demoted again only if the PMS
+  // role stops being Director, so nobody keeps Director powers after the PMS takes them away.
   const ref = db.collection('users').doc(me.uid)
   const snap = await ref.get()
   const now = FieldValue.serverTimestamp()
   const departmentId = DEPT_FOR_PMS_ROLE[me.role] ?? null
   if (!snap.exists) {
     await ref.set({
-      name: me.name, email: me.email, role: 'employee', departmentId, pmsRole: me.role,
+      name: me.name, email: me.email, role: me.role === 'director' ? 'super_admin' : 'employee', departmentId, pmsRole: me.role,
       createdAt: now, lastLoginAt: now,
     })
   } else {
-    await ref.update({ name: me.name || snap.data().name || '', email: me.email, pmsRole: me.role, departmentId, stub: FieldValue.delete(), lastLoginAt: now })
+    const old = snap.data()
+    const roleChange = me.role === 'director' ? { role: 'super_admin' } : old.pmsRole === 'director' && old.role === 'super_admin' ? { role: 'employee' } : {}
+    await ref.update({ name: me.name || old.name || '', email: me.email, pmsRole: me.role, departmentId, ...roleChange, stub: FieldValue.delete(), lastLoginAt: now })
   }
 
   const token = await tmsAuth.createCustomToken(me.uid, { pmsRole: me.role })

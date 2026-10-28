@@ -319,3 +319,23 @@ test('backfill: Directors only; fills only a missing superPrivate, never changes
   assert.equal(db.store['workspaces/priv'].superPrivate, true)
   assert.equal((await call(backfillHandler, { token: 'tms-dirUid' })).body.fixed, 0) // safe to repeat
 })
+
+// ----- a PMS Director is a Director here (role super_admin) -----
+test('login: a PMS director gets role super_admin, and loses it when the PMS role changes', async () => {
+  await call(loginHandler, { token: 'tok-dir' })
+  assert.equal(db.store['users/dirUid'].role, 'super_admin'); assert.equal(db.store['users/dirUid'].departmentId, 'director')
+  // promoted by hand to super_admin but not a PMS director: untouched
+  db.store['users/opsUid'] = { role: 'super_admin', pmsRole: 'operations' }
+  await call(loginHandler, { token: 'tok-ops' })
+  assert.equal(db.store['users/opsUid'].role, 'super_admin')
+  // a Director who stops being a PMS Director is an employee again
+  PMS_USERS.dirUid.role = 'finance'
+  await call(loginHandler, { token: 'tok-dir' })
+  assert.equal(db.store['users/dirUid'].role, 'employee'); PMS_USERS.dirUid.role = 'director'
+})
+test('create: a placeholder profile for a PMS director is super_admin', async () => {
+  PMS_USERS.dir2Uid = { role: 'director', active: true, displayName: 'Second Director' }
+  const r = await task({ action: 'create', data: { title: 'x', assigneeUids: ['dir2Uid'] } })
+  assert.equal(r.status, 200); assert.equal(db.store['users/dir2Uid'].role, 'super_admin')
+  delete PMS_USERS.dir2Uid
+})

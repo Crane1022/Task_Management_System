@@ -81,6 +81,12 @@ service cloud.firestore {
       return request.resource.data.get('activitySeq', 0) in [resource.data.get('activitySeq', 0), resource.data.get('activitySeq', 0) + 1];
     }
 
+    // Dragging a card only changes where it sits (and whether it counts as done): these fields and nothing else
+    function isMoveOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['columnId', 'status', 'position', 'completedAt', 'updatedAt', 'activitySeq']);
+    }
+
     // ---------- users ----------
     // Staff sign in with their PMS account. Profiles are created only by the sign-in function
     // (api/pms-login.js, Admin SDK, which skips these rules), so browsers can never create one.
@@ -111,7 +117,10 @@ service cloud.firestore {
         || (!boardExists(request.resource.data.boardId) && (isAdmin() || isManager())));
       allow update: if hasProfile() && request.resource.data.boardId == resource.data.boardId && (
         (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) == 'admin')
-        || (!boardExists(resource.data.boardId) && (isAdmin() || isManager())));
+        || (!boardExists(resource.data.boardId) && (isAdmin() || isManager()))
+        // anyone who can work on the board may drag a column into a new place (only its position changes)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['position'])
+            && (!boardExists(resource.data.boardId) || boardRole(resource.data.boardId) in ['admin', 'member'])));
       // Original board: only a Super Admin (they can see, and so move, the tasks of every department).
       // Workspace board: a board admin, who can see every task on it.
       allow delete: if hasProfile() && (
@@ -141,6 +150,8 @@ service cloud.firestore {
           (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) in ['admin', 'member'])
           || (!boardExists(resource.data.boardId) && (
             isAdmin()
+            // every role may drag a card it can see on the original board (nothing else about the task changes)
+            || (canReadTask(resource.data) && isMoveOnly())
             || (isManager() && inMyDept(resource.data.departmentId) && inMyDept(request.resource.data.departmentId))
             || (inMyDept(resource.data.departmentId)
                 && request.resource.data.departmentId == resource.data.departmentId

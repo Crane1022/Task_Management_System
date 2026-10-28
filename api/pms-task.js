@@ -84,7 +84,7 @@ async function ensureAssignees(db, FieldValue, me, uids) {
     const fields = await readPmsDoc(`users/${uid}`, me.idToken)
     const s = fields && staffFrom(fields)
     if (!s || !s.active || !s.role) throw new HttpError(400, `Unknown or switched-off PMS staff: ${uid}`)
-    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: 'employee', departmentId: DEPT_FOR_PMS_ROLE[s.role] ?? null, pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
+    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: s.role === 'director' ? 'super_admin' : 'employee', departmentId: DEPT_FOR_PMS_ROLE[s.role] ?? null, pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
     await ref.set(profile)
     profiles.push(profile)
   }

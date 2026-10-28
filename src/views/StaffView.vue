@@ -94,8 +94,8 @@ async function change(u, field, value) {
               <!-- Department = the person's PMS role (changed on the PMS Staff accounts page) -->
               <td class="border-y border-line bg-surface px-3 py-2.5">{{ deptName(DEPT_FOR_PMS_ROLE[u.pmsRole] ?? u.departmentId) }}</td>
               <td class="rounded-r-xl border-y border-r border-line bg-surface px-3 py-1.5">
-                <!-- You can't change your own role, so there is always a Director -->
-                <select :value="u.role" class="input w-48" :disabled="saving === u.id || u.id === auth.user.uid" :aria-label="`Role of ${u.name}`" @change="change(u, 'role', $event.target.value)">
+                <!-- You can't change your own role, so there is always a Director. A PMS Director is always a Director here -->
+                <select :value="u.role" class="input w-48" :disabled="saving === u.id || u.id === auth.user.uid || u.pmsRole === 'director'" :aria-label="`Role of ${u.name}`" @change="change(u, 'role', $event.target.value)">
                   <option v-for="r in ROLE_OPTIONS" :key="r.id" :value="r.id">{{ r.name }}</option>
                 </select>
               </td>

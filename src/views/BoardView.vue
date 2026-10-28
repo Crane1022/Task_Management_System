@@ -128,7 +128,7 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
       <p v-if="board.hasFilters && !visibleCount" class="mx-4 mt-2 flex items-center gap-2 text-sm text-muted"><SearchX class="h-4 w-4" />No tasks match these filters.</p>
       <div class="flex min-h-0 flex-1 items-start gap-4 overflow-x-auto px-4 pb-4 pt-9">
         <VueDraggable
-          v-model="colList" :disabled="!board.canManage" handle=".col-handle" :animation="180"
+          v-model="colList" :disabled="!board.canEdit" handle=".col-handle" :animation="180"
           ghost-class="col-ghost" chosen-class="col-chosen" class="flex max-h-full items-start gap-4" @end="onColumnDrop"
         >
           <KanbanColumn
