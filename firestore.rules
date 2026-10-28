@@ -87,7 +87,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow create: if false;
-      // A Super Admin sets department, role, employee ID and job position (Staff page), but can't change their own role (no lock-out).
+      // A Super Admin sets the role (Staff page; department follows the PMS role), but can't change their own role (no lock-out).
       allow update: if (isAdmin()
           && request.resource.data.role in ['super_admin', 'dept_manager', 'employee']
           && (uid != request.auth.uid || request.resource.data.role == resource.data.role))

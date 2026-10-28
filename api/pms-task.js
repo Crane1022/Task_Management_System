@@ -54,6 +54,17 @@ async function endPosition(db, columnId) {
   const snap = await db.collection('tasks').where('columnId', '==', columnId).get()
   return snap.docs.reduce((m, d) => Math.max(m, d.data().position ?? 0), 0) + STEP
 }
+// Moves a task forward to the open column with this name (e.g. 'todo', 'doing'), never backwards: a task already in
+// that column or a later one stays where it is. Returns the changes to write, or null.
+async function forwardTo(db, t, name) {
+  if (t.completedAt) return null
+  const columns = await boardColumns(db)
+  const want = name.replace(/\s/g, '').toLowerCase()
+  const target = columns.find((c) => !c.archived && !c.isDone && String(c.name).replace(/\s/g, '').toLowerCase() === want)
+  const here = columns.find((c) => c.id === t.columnId)
+  if (!target || target.id === t.columnId || (here && (here.position ?? 0) >= (target.position ?? 0))) return null
+  return { columnId: target.id, status: target.name.toUpperCase(), position: await endPosition(db, target.id), columnName: target.name }
+}
 // A batch that fails because the task changed since it was read means two people saved at the same moment: ask to try again
 async function commitOrConflict(batch) {
   try { await batch.commit() } catch (e) {
@@ -73,7 +84,7 @@ async function ensureAssignees(db, FieldValue, me, uids) {
     const fields = await readPmsDoc(`users/${uid}`, me.idToken)
     const s = fields && staffFrom(fields)
     if (!s || !s.active || !s.role) throw new HttpError(400, `Unknown or switched-off PMS staff: ${uid}`)
-    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: 'employee', departmentId: null, pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
+    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: 'employee', departmentId: DEPT_FOR_PMS_ROLE[s.role] ?? null, pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
     await ref.set(profile)
     profiles.push(profile)
   }
@@ -137,7 +148,9 @@ async function update(me, taskId, data) {
   if (!snap.exists) throw new HttpError(404, 'No such task')
   const t = snap.data()
   const sameDept = DEPT_SYNC_ROLES.includes(me.role) && !!t.departmentId && myDept(me) === t.departmentId
-  if (me.role !== 'director' && !(t.assignedTo || []).includes(me.uid) && !sameDept) throw new HttpError(403, 'Not your task')
+  // A New Owner Listing task moves to Marketing, then Operations, as the listing goes on; Procurement keeps it in sync
+  const listingTask = me.role === 'procurement' && t.pmsLink?.type === 'newOwnerListing'
+  if (me.role !== 'director' && !(t.assignedTo || []).includes(me.uid) && !sameDept && !listingTask) throw new HttpError(403, 'Not your task')
 
   const now = FieldValue.serverTimestamp()
   const changes = {}
@@ -167,6 +180,25 @@ async function update(me, taskId, data) {
     const next = (t.subtasks || []).map((s) => (want.has(s.id) ? { ...s, done: want.get(s.id) } : s))
     const ticked = next.filter((s, i) => s.done !== (t.subtasks[i].done ?? false))
     if (ticked.length) { changes.subtasks = next; logs.push(['updated', `checklist (${ticked.map((s) => s.title).join(', ')})`]) }
+  }
+
+  // started: work has begun in the PMS (the service agreement is signed or skipped) -> DOING, never backwards
+  if (data.started === true && data.completed !== true) {
+    const move = await forwardTo(db, t, 'doing')
+    if (move) {
+      const { columnName, ...c } = move
+      Object.assign(changes, c)
+      logs.push(['moved', `to ${columnName} (work started in the PMS)`])
+    }
+  }
+
+  // departmentId: hand the task to another department (e.g. marketing after payment, operation when live)
+  if (data.departmentId !== undefined) {
+    if (!DEPARTMENT_IDS.includes(data.departmentId)) throw new HttpError(400, 'Unknown department')
+    if (data.departmentId !== t.departmentId) {
+      changes.departmentId = data.departmentId
+      logs.push(['updated', `department to ${data.departmentId} (from the PMS)`])
+    }
   }
 
   if (typeof data.completed === 'boolean' && data.completed !== !!t.completedAt) {
@@ -249,9 +281,14 @@ async function link(me, taskId, data) {
   if (t.pmsKey && t.pmsKey !== key) throw new HttpError(409, `This task is linked to ${t.pmsKey} already`)
   if (t.pmsKey === key) return { ok: true, taskId, pmsKey: key }
   const now = FieldValue.serverTimestamp()
+  // Accepted by the team in the PMS (Start listing): a task still in NEW PROJECT moves to TO DO
+  const move = await forwardTo(db, t, 'todo')
+  const { columnName, ...moved } = move || {}
   const batch = db.batch()
-  const activitySeq = addActivities(db, FieldValue, batch, taskId, t.activitySeq, me, [['updated', `linked to ${pmsLink.id} in the PMS`]])
-  batch.update(ref, { pmsLink, pmsKey: key, labels: [...new Set([...(t.labels || []), 'PMS'])], activitySeq, updatedAt: now }, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
+  const logs = [['updated', `linked to ${pmsLink.id} in the PMS`]]
+  if (move) logs.push(['moved', `to ${columnName} (accepted in the PMS)`])
+  const activitySeq = addActivities(db, FieldValue, batch, taskId, t.activitySeq, me, logs)
+  batch.update(ref, { pmsLink, pmsKey: key, labels: [...new Set([...(t.labels || []), 'PMS'])], ...moved, activitySeq, updatedAt: now }, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
   await commitOrConflict(batch)
   return { ok: true, taskId, pmsKey: key }
 }
@@ -265,4 +302,4 @@ export default handle(async (req) => {
   if (action === 'inbox') return inbox(me, data || {})
   if (action === 'link') return link(me, taskId, data || {})
   throw new HttpError(400, 'Unknown action')
-})
+})

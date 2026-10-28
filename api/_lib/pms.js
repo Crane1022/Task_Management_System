@@ -13,10 +13,10 @@ export const PMS_PROJECT = process.env.PMS_PROJECT_ID || 'widebed-pmsdashboard'
 export const PMS_ROLES = ['director', 'finance', 'it', 'hr', 'operations', 'procurement', 'marketing']
 export const TMS_ROLES = ['super_admin', 'dept_manager', 'employee']
 // Same list as src/utils/constants.js DEPARTMENTS (the functions can't import from src/, which uses the browser SDK)
-export const DEPARTMENT_IDS = ['management', 'hr', 'operation', 'finance', 'marketing', 'it', 'sales', 'procurement']
-// Used only to guess a department for a PMS task when none is given and the assignee has none yet
+export const DEPARTMENT_IDS = ['director', 'management', 'hr', 'operation', 'finance', 'marketing', 'it', 'sales', 'procurement']
+// Each person's department follows their PMS role (set at every sign-in). Same map as src/utils/constants.js
 export const DEPT_FOR_PMS_ROLE = {
-  director: 'management', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
+  director: 'director', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
 }
 
 // ----- Firebase (created on first use, so importing this file never needs credentials) -----
@@ -121,4 +121,4 @@ export function handle(fn) {
 }
 
 // ----- small text helpers -----
-export const text = (v, max) => String(v ?? '').trim().slice(0, max)
+export const text = (v, max) => String(v ?? '').trim().slice(0, max)

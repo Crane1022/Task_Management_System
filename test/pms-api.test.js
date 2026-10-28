@@ -112,13 +112,13 @@ test('login: bad token 401, switched off / no role 403', async () => {
   assert.equal((await call(loginHandler, { token: 'tok-norole' })).status, 403)
 })
 
-test('login: creates the profile once and never overwrites role or department', async () => {
+test('login: creates the profile once, never overwrites role, department follows the PMS role', async () => {
   const r = await call(loginHandler, { token: 'tok-ops' })
   assert.equal(r.status, 200)
   assert.equal(r.body.token, 'custom:opsUid:operations')
   const p = db.store['users/opsUid']
-  assert.equal(p.role, 'employee'); assert.equal(p.departmentId, null); assert.equal(p.pmsRole, 'operations'); assert.equal(p.name, 'Omar Ops')
-  db.store['users/opsUid'] = { ...p, role: 'dept_manager', departmentId: 'operation' }
+  assert.equal(p.role, 'employee'); assert.equal(p.departmentId, 'operation'); assert.equal(p.pmsRole, 'operations'); assert.equal(p.name, 'Omar Ops')
+  db.store['users/opsUid'] = { ...p, role: 'dept_manager', departmentId: 'sales' }
   await call(loginHandler, { token: 'tok-ops' })
   assert.equal(db.store['users/opsUid'].role, 'dept_manager')
   assert.equal(db.store['users/opsUid'].departmentId, 'operation')
@@ -198,6 +198,35 @@ test('update: no done column -> completedAt only', async () => {
   assert.equal(r.status, 200); assert.equal(db.store[`tasks/${id}`].columnId, 'col0'); assert.ok(db.store[`tasks/${id}`].completedAt)
 })
 
+test('link moves NEW PROJECT to TODO; started then moves it to DOING', async () => {
+  const id = await seeded()
+  delete db.store[`tasks/${id}`].pmsLink; delete db.store[`tasks/${id}`].pmsKey // a task made in the TMS, not linked yet
+  const l = await task({ action: 'link', taskId: id, data: { pmsLink: { type: 'newOwnerListing', id: 'NL-0009' } } })
+  assert.equal(l.status, 200); assert.equal(db.store[`tasks/${id}`].columnId, 'col1'); assert.equal(db.store[`tasks/${id}`].status, 'TODO')
+  const u = await task({ action: 'update', taskId: id, data: { text: 'Agreement skipped', started: true } })
+  assert.equal(u.body.status, 'DOING')
+})
+
+test('update: departmentId hands the task over; Procurement still syncs a listing task after', async () => {
+  const id = await seeded()
+  db.store[`tasks/${id}`].pmsLink = { type: 'newOwnerListing', id: 'NL-0001' }
+  db.store[`tasks/${id}`].departmentId = 'procurement'
+  assert.equal((await task({ action: 'update', taskId: id, data: { text: 'x', departmentId: 'nope' } })).status, 400)
+  const r = await task({ action: 'update', taskId: id, data: { text: 'Paid', departmentId: 'marketing' } })
+  assert.equal(r.status, 200); assert.equal(db.store[`tasks/${id}`].departmentId, 'marketing')
+  const p = await call(taskHandler, { token: 'tok-proc', body: { action: 'update', taskId: id, data: { text: 'Live', departmentId: 'operation' } } })
+  assert.equal(p.status, 200); assert.equal(db.store[`tasks/${id}`].departmentId, 'operation')
+})
+
+test('update: started moves a waiting task to DOING, never backwards', async () => {
+  const id = await seeded()
+  const r = await task({ action: 'update', taskId: id, data: { text: 'Agreement signed', started: true } })
+  assert.equal(r.status, 200); assert.equal(r.body.status, 'DOING'); assert.equal(db.store[`tasks/${id}`].columnId, 'col2')
+  db.store[`tasks/${id}`].columnId = 'col3'; db.store[`tasks/${id}`].status = 'REVIEW'
+  const again = await task({ action: 'update', taskId: id, data: { text: 'More', started: true } })
+  assert.equal(again.body.status, 'REVIEW'); assert.equal(db.store[`tasks/${id}`].columnId, 'col3')
+})
+
 test('list: needs type and id', async () => {
   assert.equal((await task({ action: 'list', data: {} })).status, 400)
   assert.deepEqual((await task({ action: 'list', data: { type: 'nol', id: 'none' } })).body.tasks, [])
@@ -272,4 +301,4 @@ test('update: Procurement syncs the whole checklist of a same-department task, k
   const sid = db.store['tasks/p1'].subtasks[0].id
   await proc({ action: 'update', taskId: 'p1', data: { subtasks: [{ id: sid, done: false }] } })
   assert.equal(db.store['tasks/p1'].subtasks[0].done, false)
-})
+})

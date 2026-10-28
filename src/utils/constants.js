@@ -1,4 +1,5 @@
 export const DEPARTMENTS = [
+  { id: 'director', name: 'Director' },
   { id: 'management', name: 'Management' },
   { id: 'hr', name: 'HR' },
   { id: 'operation', name: 'Operation' },
@@ -22,6 +23,11 @@ export const BOARD_ID = 'main'
 export const DEFAULT_PROJECT_ID = 'general'
 
 export const DEFAULT_COLUMNS = ['NEW PROJECT', 'TODO', 'DOING', 'REVIEW', 'DONE']
+
+// Each person's department follows their PMS role (set at sign-in by api/pms-login.js). Same map as api/_lib/pms.js
+export const DEPT_FOR_PMS_ROLE = {
+  director: 'director', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
+}
 
 export const deptName = (id) => (id ? DEPARTMENTS.find((d) => d.id === id)?.name ?? id : 'No department')
 export const priorityOf = (id) => PRIORITIES.find((p) => p.id === id) ?? PRIORITIES[1]

@@ -60,7 +60,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
       <span v-else class="md:hidden text-sm font-extrabold">Widebed Tasks</span>
     </div>
 
-    <nav class="flex-1 space-y-1 px-2 py-2">
+    <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 py-2">
       <router-link
         v-for="l in links" :key="l.to" :to="l.to" exact-active-class="bg-accent-soft text-accent"
         class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-muted hover:bg-bg"
@@ -71,7 +71,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
       </router-link>
       <div class="flex items-center justify-between px-3 pb-1 pt-4" :class="ui.collapsed && 'md:hidden'">
         <p class="text-[11px] font-bold uppercase tracking-wide text-muted">Workspaces</p>
-        <button v-if="wsStore.canCreateWorkspace" class="rounded p-0.5 text-muted hover:bg-bg hover:text-accent" title="Create a workspace" aria-label="Create a workspace" @click="creatingWs = true"><Plus class="h-4 w-4" /></button>
+        <button v-if="wsStore.canCreateWorkspace" class="rounded p-0.5 text-muted hover:bg-bg hover:text-accent" title="Create a workspace" aria-label="Create a workspace" @click="creatingWs = true; ui.mobileNav = false"><Plus class="h-4 w-4" /></button>
       </div>
       <div v-for="w in myWorkspaces" :key="w.id">
         <div class="flex items-center">

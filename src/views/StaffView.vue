@@ -4,9 +4,9 @@ import { Info } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { subscribeUsers, updateUser } from '@/services/userService'
-import { DEPARTMENTS, ROLES } from '@/utils/constants'
+import { ROLES, DEPT_FOR_PMS_ROLE, deptName } from '@/utils/constants'
 
-// Director (super_admin): set each person's department and role here. Accounts are not made here:
+// Director (super_admin): set each person's role here. The department follows the PMS role. Accounts are not made here:
 // they are made on the PMS Staff accounts page, and people appear after their first sign-in
 // (or once a Director assigns them a task from the PMS).
 const auth = useAuthStore()
@@ -22,11 +22,22 @@ const ROLE_OPTIONS = [
   { id: ROLES.MANAGER, name: 'Department Manager' },
   { id: ROLES.EMPLOYEE, name: 'Employee' },
 ]
-const PMS_ROLE = { director: 'Director', finance: 'Finance', it: 'IT', hr: 'HR', operations: 'Operations', procurement: 'Procurement', marketing: 'Marketing' }
+
+// Profiles made before the department followed the PMS role are brought in line once, when a Director opens this page.
+// (Sign-in keeps them in line from then on.)
+const synced = new Set()
+function syncDepartments(list) {
+  for (const u of Object.values(list)) {
+    const dept = DEPT_FOR_PMS_ROLE[u.pmsRole]
+    if (!dept || u.departmentId === dept || synced.has(u.id)) continue
+    synced.add(u.id)
+    updateUser(u.id, { departmentId: dept }).catch((e) => console.error('Department sync failed', u.id, e))
+  }
+}
 
 let unsub
 onMounted(() => {
-  unsub = subscribeUsers((u) => { users.value = u; loading.value = false }, (e) => { error.value = e.message; loading.value = false })
+  unsub = subscribeUsers((u) => { users.value = u; loading.value = false; syncDepartments(u) }, (e) => { error.value = e.message; loading.value = false })
 })
 onUnmounted(() => unsub?.())
 
@@ -41,7 +52,7 @@ async function change(u, field, value) {
   saving.value = u.id
   try {
     await updateUser(u.id, { [field]: value || null })
-    ui.toast(`${u.name}: ${{ role: 'role', departmentId: 'department', employeeId: 'employee ID', jobTitle: 'job position' }[field]} saved`)
+    ui.toast(`${u.name}: ${{ role: 'role' }[field]} saved`)
   } catch (e) {
     console.error(e)
     ui.toast(`Could not save: ${e.code ?? e.message}`, 'error')
@@ -69,9 +80,9 @@ async function change(u, field, value) {
       </div>
       <p v-else-if="!rows.length" class="mt-6 text-center text-sm font-semibold text-muted">{{ search ? 'Nobody matches this search.' : 'Nobody has signed in yet.' }}</p>
       <div v-else class="mt-2 overflow-x-auto">
-        <table class="w-full min-w-[1000px] border-separate border-spacing-y-1.5 text-left text-sm">
+        <table class="w-full min-w-[720px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead class="text-xs font-bold text-muted">
-            <tr><th class="px-3 py-1">Name</th><th class="px-3 py-1">Email</th><th class="px-3 py-1">PMS role</th><th class="px-3 py-1">Department</th><th class="px-3 py-1">Employee ID</th><th class="px-3 py-1">Job position</th><th class="px-3 py-1">Role here</th></tr>
+            <tr><th class="px-3 py-1">Name</th><th class="px-3 py-1">Email</th><th class="px-3 py-1">Department</th><th class="px-3 py-1">Role here</th></tr>
           </thead>
           <tbody>
             <tr v-for="u in rows" :key="u.id">
@@ -80,15 +91,8 @@ async function change(u, field, value) {
                 <span v-if="u.stub" class="ml-1.5 rounded-md bg-bg px-1.5 py-0.5 text-xs font-semibold text-muted" title="Assigned a task from the PMS, has not signed in yet">not signed in yet</span>
               </td>
               <td class="border-y border-line bg-surface px-3 py-2.5 text-muted">{{ u.email || '—' }}</td>
-              <td class="border-y border-line bg-surface px-3 py-2.5">{{ PMS_ROLE[u.pmsRole] ?? '—' }}</td>
-              <td class="border-y border-line bg-surface px-3 py-1.5">
-                <select :value="u.departmentId ?? ''" class="input w-44" :disabled="saving === u.id" :aria-label="`Department of ${u.name}`" @change="change(u, 'departmentId', $event.target.value)">
-                  <option value="">No department</option>
-                  <option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ d.name }}</option>
-                </select>
-              </td>
-              <td class="border-y border-line bg-surface px-3 py-1.5"><input :value="u.employeeId ?? ''" class="input w-32" maxlength="30" :disabled="saving === u.id" :aria-label="`Employee ID of ${u.name}`" @change="change(u, 'employeeId', $event.target.value.trim())" /></td>
-              <td class="border-y border-line bg-surface px-3 py-1.5"><input :value="u.jobTitle ?? ''" class="input w-44" maxlength="60" :disabled="saving === u.id" :aria-label="`Job position of ${u.name}`" @change="change(u, 'jobTitle', $event.target.value.trim())" /></td>
+              <!-- Department = the person's PMS role (changed on the PMS Staff accounts page) -->
+              <td class="border-y border-line bg-surface px-3 py-2.5">{{ deptName(DEPT_FOR_PMS_ROLE[u.pmsRole] ?? u.departmentId) }}</td>
               <td class="rounded-r-xl border-y border-r border-line bg-surface px-3 py-1.5">
                 <!-- You can't change your own role, so there is always a Director -->
                 <select :value="u.role" class="input w-48" :disabled="saving === u.id || u.id === auth.user.uid" :aria-label="`Role of ${u.name}`" @change="change(u, 'role', $event.target.value)">

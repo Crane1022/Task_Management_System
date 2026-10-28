@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { COLUMN_COLORS, WORKSPACE_ICONS } from '@/utils/constants'
 import WorkspaceAvatar from './WorkspaceAvatar.vue'
@@ -11,6 +11,11 @@ const form = ref({ name: '', description: '', icon: '', color: 'sage', superPriv
 const busy = ref(false)
 const error = ref('')
 
+// Escape closes it, like the other dialogs
+const onKey = (e) => { if (e.key === 'Escape') emit('close') }
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => window.removeEventListener('keydown', onKey))
+
 async function submit() {
   if (!form.value.name.trim()) { error.value = 'Give the workspace a name.'; return }
   busy.value = true
@@ -21,11 +26,13 @@ async function submit() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" @click.self="emit('close')">
-    <form class="w-full max-w-md rounded-2xl bg-surface p-5 shadow-xl" role="dialog" aria-modal="true" aria-label="Create workspace" @submit.prevent="submit">
+  <!-- Teleported to the page itself: inside the sidebar the dialog was squeezed into the sidebar's width -->
+  <Teleport to="body">
+  <div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center" @click.self="emit('close')">
+    <form class="my-auto w-full max-w-xl rounded-2xl bg-surface p-5 shadow-xl sm:p-6" role="dialog" aria-modal="true" aria-label="Create workspace" @submit.prevent="submit">
       <h2 class="flex items-center gap-2 text-base font-extrabold"><WorkspaceAvatar :workspace="form" :size="28" />Create a workspace</h2>
       <p class="mt-1 text-sm text-muted">A workspace is a department or working group. It holds boards, and only its members can see them. You become its owner and admin.</p>
-      <div class="mt-4 space-y-3">
+      <div class="mt-4 space-y-4">
         <div><label class="label" for="ws-name">Name</label><input id="ws-name" v-model="form.name" class="input" maxlength="80" placeholder="e.g. Operation Workspace" autofocus /></div>
         <div><label class="label" for="ws-desc">Description (optional)</label><textarea id="ws-desc" v-model="form.description" rows="2" class="input" maxlength="300" /></div>
         <div>
@@ -56,4 +63,5 @@ async function submit() {
       </div>
     </form>
   </div>
+  </Teleport>
 </template>
