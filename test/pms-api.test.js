@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { setServicesForTest } from '../api/_lib/pms.js'
 import loginHandler from '../api/pms-login.js'
 import taskHandler from '../api/pms-task.js'
+import backfillHandler from '../api/workspace-backfill.js'
 
 process.env.ALLOWED_ORIGINS = 'https://pms.example.test, http://localhost:5173'
 
@@ -74,7 +75,7 @@ beforeEach(() => {
     FieldValue: { serverTimestamp: () => TS, delete: () => DEL },
     Timestamp: { fromDate: ts },
     pmsAuth: { verifyIdToken: async (t) => { if (!TOKENS[t]) throw new Error('bad'); return { uid: TOKENS[t], email: PMS_USERS[TOKENS[t]].email } } },
-    tmsAuth: { createCustomToken: async (uid, claims) => `custom:${uid}:${claims.pmsRole}` },
+    tmsAuth: { createCustomToken: async (uid, claims) => `custom:${uid}:${claims.pmsRole}`, verifyIdToken: async (t) => { if (!t.startsWith('tms-')) throw new Error('bad'); return { uid: t.slice(4) } } },
   })
 })
 
@@ -302,3 +303,19 @@ test('update: Procurement syncs the whole checklist of a same-department task, k
   await proc({ action: 'update', taskId: 'p1', data: { subtasks: [{ id: sid, done: false }] } })
   assert.equal(db.store['tasks/p1'].subtasks[0].done, false)
 })
+// ----- workspace backfill (old workspaces get superPrivate: false so every Director can list them) -----
+test('backfill: Directors only; fills only a missing superPrivate, never changes true or false', async () => {
+  db.store['users/dirUid'] = { role: 'super_admin' }; db.store['users/opsUid'] = { role: 'employee' }
+  db.store['workspaces/old1'] = { name: 'Old' }
+  db.store['workspaces/old2'] = { name: 'Old 2' }
+  db.store['workspaces/open'] = { name: 'Open', superPrivate: false }
+  db.store['workspaces/priv'] = { name: 'Private', superPrivate: true }
+  assert.equal((await call(backfillHandler, {})).status, 401)
+  assert.equal((await call(backfillHandler, { token: 'bad' })).status, 401)
+  assert.equal((await call(backfillHandler, { token: 'tms-opsUid' })).status, 403)
+  const r = await call(backfillHandler, { token: 'tms-dirUid' })
+  assert.equal(r.status, 200); assert.equal(r.body.fixed, 2)
+  assert.equal(db.store['workspaces/old1'].superPrivate, false); assert.equal(db.store['workspaces/old2'].superPrivate, false)
+  assert.equal(db.store['workspaces/priv'].superPrivate, true)
+  assert.equal((await call(backfillHandler, { token: 'tms-dirUid' })).body.fixed, 0) // safe to repeat
+})

@@ -46,8 +46,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  // Workspaces made before Super Private existed have no superPrivate field, and a Director's list cannot find those.
+  // A Director's sign-in asks the server once (per browser) to fill the missing field with false; nothing else changes.
+  // Returns { ok, fixed } or { ok: false, message } so the sidebar can say exactly what went wrong.
+  async function backfillOldWorkspaces(force = false) {
+    const key = 'wb-ws-backfill-v1'
+    try {
+      if (!force && localStorage.getItem(key)) return { ok: true, fixed: 0 }
+      const r = await fetch('/api/workspace-backfill', { method: 'POST', headers: { Authorization: `Bearer ${await auth.user.getIdToken()}` } })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) return { ok: false, message: `The server answered ${r.status}${body.error ? `: ${body.error}` : ' (is api/workspace-backfill.js deployed?)'}` }
+      localStorage.setItem(key, '1')
+      return { ok: true, fixed: body.fixed ?? 0 }
+    } catch (e) { return { ok: false, message: e.message || 'No connection' } }
+  }
+
   function start() {
     stop()
+    if (auth.isAdmin) backfillOldWorkspaces()
     loading.value = true; error.value = ''
     unsubs = [
       svc.subscribeWorkspaces({ uid: auth.user.uid, isAdmin: auth.isAdmin }, (list) => {
@@ -113,7 +129,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   return {
     workspaces, boards, stars, loading, error, canCreateWorkspace, allBoards,
     workspaceById, boardById, isStarred, roleIn, roleOnBoard, canManageMembers, isOwner,
-    start, stop, addWorkspace, saveWorkspace, setSuperPrivate, addMembers, changeRole, kick,
+    backfillOldWorkspaces, start, stop, addWorkspace, saveWorkspace, setSuperPrivate, addMembers, changeRole, kick,
     addBoard, saveBoard, setBoardRole, removeBoard, adoptMain, toggleStar,
   }
 })

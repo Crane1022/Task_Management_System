@@ -23,6 +23,13 @@ function toggleWs(id) {
   openIds.value = isOpen(id) ? openIds.value.filter((x) => x !== id) : [...openIds.value, id]
   localStorage.setItem('wb-ws-open', JSON.stringify(openIds.value))
 }
+const checking = ref(false)
+async function checkOld() {
+  checking.value = true
+  const r = await wsStore.backfillOldWorkspaces(true)
+  checking.value = false
+  ui.toast(r.ok ? (r.fixed ? `Updated ${r.fixed} older workspace${r.fixed === 1 ? '' : 's'}. They will appear in a moment.` : 'Nothing to update. If the list is still empty, no workspace is shared with you yet, or the latest firestore.rules are not published.') : r.message, r.ok ? 'success' : 'error')
+}
 const creatingWs = ref(false)
 function wsCreated(id) {
   creatingWs.value = false
@@ -90,6 +97,11 @@ async function signOut() { await auth.logout(); router.push('/login') }
         </div>
       </div>
       <p v-if="!myWorkspaces.length && !wsStore.loading" class="px-3 py-1 text-xs text-muted" :class="ui.collapsed && 'md:hidden'">{{ wsStore.canCreateWorkspace ? 'No workspaces yet. Press + to create one.' : 'You are not in a workspace yet.' }}</p>
+      <div v-if="auth.isAdmin && !wsStore.loading && !myWorkspaces.length" class="mx-3 mb-1 rounded-lg bg-bg p-2 text-xs text-muted" :class="ui.collapsed && 'md:hidden'">
+        <p v-if="wsStore.error" class="font-semibold text-red-600" role="alert">Could not load workspaces: {{ wsStore.error }}</p>
+        <p>Workspaces made before Super Private existed need a one-time update before every Director can see them.</p>
+        <button type="button" class="mt-1.5 font-bold text-accent hover:underline" :disabled="checking" @click="checkOld">{{ checking ? 'Checking…' : 'Find older workspaces' }}</button>
+      </div>
       <template v-if="auth.isAdmin">
         <p class="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wide text-muted" :class="ui.collapsed && 'md:hidden'">Admin</p>
         <router-link
