@@ -41,7 +41,9 @@ function onDrop(evt) {
     <header class="flex items-center gap-1 px-2 pb-1" :class="color ? 'pt-2' : 'pt-3'">
       <button v-if="canEdit && !virtual" class="col-handle cursor-grab touch-none rounded p-1 text-muted hover:bg-bg active:cursor-grabbing" title="Drag to reorder this column" aria-label="Drag to reorder this column"><GripVertical class="h-4 w-4" /></button>
       <template v-if="!editing">
-        <h2 class="truncate text-xs font-extrabold tracking-wide">{{ column.name }}</h2>
+        <h2 class="min-w-0 flex-1 whitespace-normal break-words text-xs font-extrabold leading-relaxed tracking-wide">
+          {{ column.name }}
+        </h2>
         <CircleCheck v-if="column.isDone" class="h-3.5 w-3.5 shrink-0 text-accent" title="Counts as completed" />
         <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold" :class="over ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200' : 'bg-bg text-muted'"
           :title="over ? `Over the limit of ${column.limit} tasks` : ''">{{ total }}<template v-if="column.limit"> / {{ column.limit }}</template></span>
