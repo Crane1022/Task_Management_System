@@ -8,7 +8,6 @@ import { priorityOf, deptName, displayOf } from '@/utils/constants'
 import { formatDate, dueState } from '@/utils/dates'
 import FilterBar from '@/components/FilterBar.vue'
 import BoardPicker from '@/components/BoardPicker.vue'
-import TaskToolbar from '@/components/TaskToolbar.vue'
 import TaskModalHost from '@/components/TaskModalHost.vue'
 
 const board = useBoardStore()
@@ -51,7 +50,6 @@ const names = (t) => (t.assignedTo ?? []).map((id) => displayOf(board.users[id])
       <h1 class="mr-2 text-lg font-extrabold">List<span v-if="board.boardName" class="text-sm font-bold text-muted"> · {{ board.boardName }}</span><span v-if="shown" class="text-sm font-bold text-accent"> · {{ shown }} ({{ rows.length }})</span></h1>
       <BoardPicker />
       <FilterBar />
-      <TaskToolbar />
       <select v-model="sort" class="input w-44" aria-label="Sort tasks">
         <option value="due">Sort: deadline</option><option value="priority">Sort: priority</option><option value="new">Sort: newest</option>
       </select>

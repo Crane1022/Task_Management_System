@@ -1,17 +1,20 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Sun, Moon, Menu, UserRound, Palette, LogOut, PawPrint } from 'lucide-vue-next'
+import { useRouter, useRoute } from 'vue-router'
+import { Sun, Moon, Menu, Search, Plus, UserRound, Palette, LogOut, PawPrint } from 'lucide-vue-next'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { useBoardStore } from '@/stores/board'
 import { displayOf, deptName } from '@/utils/constants'
 
 const ui = useUiStore()
 const auth = useAuthStore()
 const theme = useThemeStore()
 const router = useRouter()
+const route = useRoute()
+const board = useBoardStore() // the task pages (board, list, my tasks) share one search box and one New task button, here in the bar
 const menu = ref(false)
 const roleLabel = { super_admin: 'Director', dept_manager: 'Department Manager', employee: 'Employee' }
 async function signOut() { menu.value = false; await auth.logout(); router.push('/login') }
@@ -20,6 +23,13 @@ async function signOut() { menu.value = false; await auth.logout(); router.push(
 <template>
   <header class="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
     <button class="text-muted md:hidden" aria-label="Open menu" @click="ui.mobileNav = true"><Menu class="h-5 w-5" /></button>
+    <template v-if="route.meta.tasks">
+      <div class="relative w-full max-w-xs">
+        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <input v-model="board.filters.search" type="search" class="input py-1.5 pl-9" placeholder="Search tasks" aria-label="Search tasks by title or description" />
+      </div>
+      <button v-if="board.canEdit" class="btn-primary shrink-0" @click="ui.requestNewTask()"><Plus class="h-4 w-4" /><span class="hidden sm:inline">New task</span><span class="sr-only sm:hidden">New task</span></button>
+    </template>
     <span class="flex-1" />
 
     <!-- far right, the same on every page: dark mode, then the profile -->

@@ -12,7 +12,6 @@ import { CATS } from '@/utils/widgets'
 import KanbanColumn from '@/components/KanbanColumn.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import BoardPicker from '@/components/BoardPicker.vue'
-import TaskToolbar from '@/components/TaskToolbar.vue'
 import BoardSettingsDialog from '@/components/BoardSettingsDialog.vue'
 import TaskModalHost from '@/components/TaskModalHost.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -83,7 +82,6 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
       <span v-if="board.resolved !== false && !board.loading && !board.canEdit && !board.denied" class="flex items-center gap-1 rounded-full bg-bg px-2.5 py-1 text-xs font-bold text-muted"><Eye class="h-3.5 w-3.5" />View only</span>
       <span v-if="board.aggregate && !mine" class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent" title="The same tasks as on each workspace board">All my workspaces</span>
       <FilterBar :mine="mine" />
-      <TaskToolbar />
       <button v-if="board.canManage && board.archivedColumns.length" class="btn-ghost py-1.5" @click="showArchived = !showArchived"><Archive class="h-4 w-4" />Archived ({{ board.archivedColumns.length }})</button>
     </div>
 
