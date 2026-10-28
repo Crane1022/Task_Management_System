@@ -6,11 +6,15 @@ import { STAT_TYPES } from '@/utils/widgets'
 import { formatDate } from '@/utils/dates'
 import { deptName } from '@/utils/constants'
 
-const props = defineProps({ widget: Object, stats: Object, editing: Boolean, cat: String })
+const props = defineProps({ widget: Object, stats: Object, editing: Boolean, cat: String, scope: { type: Object, default: () => ({}) } })
 const emit = defineEmits(['update', 'remove'])
 
 const icons = { total: ListTodo, completed: CircleCheck, pending: Hourglass, overdue: TriangleAlert, dueToday: CalendarClock }
 const isStat = computed(() => STAT_TYPES.includes(props.widget.type))
+// A number card opens the List with exactly those tasks (same dashboard filters carried over)
+const to = computed(() => !props.editing && isStat.value
+  ? { path: '/list', query: { show: props.widget.type, ...(props.scope.assignee && { assignee: props.scope.assignee }), ...(props.scope.department && { department: props.scope.department }), ...(props.scope.days && { days: props.scope.days }) } }
+  : null)
 const isList = computed(() => ['dueSoon', 'overdueList'].includes(props.widget.type))
 
 // Bar charts share one layout
@@ -23,7 +27,12 @@ const C = 2 * Math.PI * 42 // ring circumference
 </script>
 
 <template>
-  <article class="relative flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card" :class="editing && 'cursor-grab ring-2 ring-accent/30'">
+  <component
+    :is="to ? 'router-link' : 'article'" :to="to || undefined"
+    class="relative flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card"
+    :class="[editing && 'cursor-grab ring-2 ring-accent/30', to && 'cursor-pointer hover:-translate-y-0.5 hover:border-highlight hover:shadow-lg transition-[transform,box-shadow,border-color] duration-200']"
+    :title="to ? `See these ${stats.counts[widget.type]} tasks in the list` : undefined"
+  >
     <CatPeek v-if="cat && !editing" :variant="cat" />
 
     <header class="flex items-center gap-2">
@@ -67,5 +76,5 @@ const C = 2 * Math.PI * 42 // ring circumference
     </ul>
 
     <p v-else class="mt-3 text-sm text-muted">Nothing to show yet.</p>
-  </article>
+  </component>
 </template>

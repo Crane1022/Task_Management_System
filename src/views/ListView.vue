@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import { useBoardStore } from '@/stores/board'
 import { useTaskEditor } from '@/composables/useTaskEditor'
@@ -14,7 +15,23 @@ const board = useBoardStore()
 const editor = reactive(useTaskEditor())
 const sort = ref('due')
 
-onMounted(() => { board.clearFilters(); board.start(undefined, { aggregate: true }) })
+const route = useRoute()
+// A dashboard card opens this page with ?show=... so the list holds exactly the tasks that were counted
+const SHOW = {
+  total: {}, completed: { state: 'done' }, pending: { state: 'open' },
+  overdue: { state: 'open', deadline: 'overdue' }, dueToday: { state: 'open', deadline: 'today' },
+}
+const shown = computed(() => ({ total: 'All tasks', completed: 'Completed tasks', pending: 'Pending tasks', overdue: 'Overdue tasks', dueToday: 'Tasks due today' })[route.query.show] ?? '')
+onMounted(() => {
+  board.clearFilters()
+  // Same tasks as the Dashboard (the chosen board's own tasks), so a number on the Dashboard matches the list it opens
+  board.start()
+  const q = route.query
+  Object.assign(board.filters, SHOW[q.show] ?? {})
+  if (q.assignee) board.filters.assignee = String(q.assignee)
+  if (q.department) board.filters.department = String(q.department)
+  if (q.days) board.filters.createdDays = String(q.days)
+})
 onUnmounted(() => board.stop())
 
 const ORDER = { urgent: 0, high: 1, medium: 2, low: 3 }
@@ -31,13 +48,13 @@ const names = (t) => (t.assignedTo ?? []).map((id) => displayOf(board.users[id])
 <template>
   <div class="flex h-full flex-col">
     <div class="flex flex-wrap items-center gap-2 px-4 pb-2 pt-4">
-      <h1 class="mr-2 text-lg font-extrabold">List<span v-if="board.boardName" class="text-sm font-bold text-muted"> · {{ board.boardName }}</span></h1>
+      <h1 class="mr-2 text-lg font-extrabold">List<span v-if="board.boardName" class="text-sm font-bold text-muted"> · {{ board.boardName }}</span><span v-if="shown" class="text-sm font-bold text-accent"> · {{ shown }} ({{ rows.length }})</span></h1>
       <BoardPicker />
       <FilterBar />
       <TaskToolbar />
-      <!-- <select v-model="sort" class="input w-44" aria-label="Sort tasks">
+      <select v-model="sort" class="input w-44" aria-label="Sort tasks">
         <option value="due">Sort: deadline</option><option value="priority">Sort: priority</option><option value="new">Sort: newest</option>
-      </select> -->
+      </select>
     </div>
 
     <div v-if="board.loading" class="space-y-2 px-4 pt-2"><div v-for="n in 6" :key="n" class="skeleton h-12" /></div>

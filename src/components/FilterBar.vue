@@ -24,8 +24,12 @@ function clear() { board.clearFilters(); if (props.mine) board.filters.assignee 
     <option value="">Any deadline</option><option value="overdue">Overdue</option><option value="today">Due today</option>
     <option value="week">Next 7 days</option><option value="none">No deadline</option>
   </select>
-  <select v-if="auth.isAdmin" v-model="board.filters.department" class="input w-40 sm:hidden" aria-label="Filter by department">
+  <select v-model="board.filters.state" class="input w-36" aria-label="Filter by done or open">
+    <option value="">All tasks</option><option value="open">Open (pending)</option><option value="done">Completed</option>
+  </select>
+  <select v-if="auth.isAdmin" v-model="board.filters.department" class="input w-40" aria-label="Filter by department">
     <option value="">All departments</option><option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ d.name }}</option>
   </select>
+  <span v-if="board.filters.createdDays" class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent">Created in the last {{ board.filters.createdDays }} days</span>
   <button v-if="extra" class="text-sm font-semibold text-accent" @click="clear">Clear filters</button>
 </template>

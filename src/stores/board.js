@@ -42,7 +42,7 @@ export const useBoardStore = defineStore('board', () => {
   const users = ref({})
   const loading = ref(true)
   const error = ref('')
-  const filters = reactive({ search: '', assignee: '', department: '', priority: '', deadline: '' })
+  const filters = reactive({ search: '', assignee: '', department: '', priority: '', deadline: '', state: '', createdDays: '' })
   let unsubs = []
   let dataUnsubs = []
   const extraStops = new Map()
@@ -188,6 +188,9 @@ export const useBoardStore = defineStore('board', () => {
       if (!t.assignedTo?.includes(id)) return false
     }
     if (f.department && t.departmentId !== f.department) return false
+    if (f.state === 'done' && !t.completedAt) return false // the dashboard cards: Completed / Pending
+    if (f.state === 'open' && t.completedAt) return false
+    if (f.createdDays && (t.createdAt?.toMillis?.() ?? Date.now()) < Date.now() - Number(f.createdDays) * 86400000) return false
     if (f.priority && t.priority !== f.priority) return false
     if (f.deadline) {
       const due = t.dueDate?.toDate?.()

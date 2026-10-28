@@ -99,7 +99,7 @@ const catFor = (i) => (i % 3 === 0 ? CATS[(i / 3) % CATS.length] : '')
       <template v-else-if="dash.active">
         <VueDraggable v-model="list" :disabled="!editing" :animation="150" filter="input, button" :prevent-on-filter="false" ghost-class="drag-ghost"
           class="mt-9 grid grid-cols-1 gap-x-4 gap-y-9 md:grid-cols-6 lg:grid-cols-12" @end="saveOrder">
-          <DashboardWidget v-for="(w, i) in list" :key="w.id" :class="SIZE_CLASS[w.size]" :widget="w" :stats="stats" :editing="editing" :cat="catFor(i)"
+          <DashboardWidget v-for="(w, i) in list" :key="w.id" :class="SIZE_CLASS[w.size]" :widget="w" :stats="stats" :scope="scope" :editing="editing" :cat="catFor(i)"
             @update="(patch) => updateWidget(w.id, patch)" @remove="removeWidget(w.id)" />
         </VueDraggable>
         <p v-if="!list.length" class="mt-10 text-center text-sm text-muted">This dashboard is empty. Press Customize to add widgets.</p>
