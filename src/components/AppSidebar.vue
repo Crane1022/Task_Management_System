@@ -91,7 +91,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
             <component :is="isOpen(w.id) ? ChevronDown : ChevronRight" class="h-4 w-4" />
           </button>
         </div>
-        <div v-if="isOpen(w.id)" class="ml-[22px] space-y-0.5 border-l border-line pl-2" :class="ui.collapsed && 'md:hidden'">
+        <div v-if="isOpen(w.id)" class="reveal ml-[22px] pt-1 space-y-0.5 border-l border-line pl-2" :class="ui.collapsed && 'md:hidden'">
           <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${w.id}${s.p}`"
             exact-active-class="bg-accent-soft text-accent" class="block rounded-md px-2.5 py-1 text-[13px] font-semibold text-muted hover:bg-bg" @click="ui.mobileNav = false">{{ s.l }}</router-link>
         </div>

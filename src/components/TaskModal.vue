@@ -114,7 +114,7 @@ function submit() {
 
 <template>
   <div class="fixed inset-0 z-50 flex justify-end bg-black/40" @click.self="emit('close')">
-    <form class="flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
+    <form class="slide-panel flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
       <header class="flex items-center justify-between border-b border-line px-5 py-3">
         <h2 class="text-base font-extrabold">{{ t ? 'Task details' : 'New task' }}</h2>
         <button type="button" class="rounded p-1 text-muted hover:bg-bg" aria-label="Close" @click="emit('close')"><X class="h-5 w-5" /></button>

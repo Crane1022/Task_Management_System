@@ -49,7 +49,38 @@
 .col-ghost { opacity: 0.5; outline: 2px dashed var(--highlight); outline-offset: 2px; }
 .col-chosen { box-shadow: 0 10px 30px rgb(0 0 0 / 0.15); }
 .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation: none !important; transition: none !important; }
-.skeleton { @apply animate-pulse rounded-xl bg-line; }
+/* ---------- motion: gentle, short, and switched off by Reduce motion (and by the system setting, below) ---------- */
+:root { --ease: cubic-bezier(0.22, 1, 0.36, 1); }
+html { scroll-behavior: smooth; }
+/* colours glide when the theme or dark mode changes, and on hover; classes with their own transition still win */
+*, ::before, ::after { transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease), opacity 0.2s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes slide-in { from { opacity: 0.6; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+/* a page fades up when you open it */
+main > * { animation: rise 0.32s var(--ease) backwards; }
+/* pop-ups: the dark backdrop fades in and the box rises */
+.fixed.inset-0[class*='bg-black'] { animation: fade 0.2s ease-out backwards; }
+[role='dialog'] { animation: pop 0.26s var(--ease) backwards; }
+.slide-panel { animation: slide-in 0.3s var(--ease) backwards; }
+/* menus and the nested workspace links open downward */
+[role='menu'], .reveal { animation: drop-in 0.18s var(--ease) backwards; transform-origin: top; }
+/* task cards: rise in when they appear, lift on hover, and feel picked up while dragged */
+.task-card { animation: rise 0.28s var(--ease) backwards; transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), border-color 0.2s var(--ease); }
+.task-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgb(0 0 0 / 0.1); }
+.sortable-chosen.task-card, .sortable-drag.task-card { transform: rotate(1.5deg) scale(1.02); box-shadow: 0 14px 30px rgb(0 0 0 / 0.2); cursor: grabbing; }
+.btn:active { transform: scale(0.97); }
+.btn { transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), opacity 0.2s var(--ease), transform 0.12s var(--ease); }
+.input { transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background-color 0.2s var(--ease); }
+.input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+/* toasts slide in and out */
+.toast-enter-active, .toast-leave-active { transition: transform 0.3s var(--ease), opacity 0.25s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(24px); }
+.toast-move { transition: transform 0.25s var(--ease); }
+.skeleton { @apply rounded-xl bg-line; background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 55%, transparent), transparent); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

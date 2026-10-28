@@ -17,7 +17,7 @@ const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(
 </script>
 
 <template>
-  <article class="cursor-pointer rounded-xl border border-line bg-surface p-3 shadow-card transition-colors hover:border-highlight">
+  <article class="task-card cursor-pointer rounded-xl border border-line bg-surface p-3 shadow-card hover:border-highlight">
     <div v-if="task.labels?.length" class="mb-2 flex flex-wrap gap-1">
       <span v-for="l in task.labels" :key="l" class="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" :style="{ background: labelColor(l) }">{{ l }}</span>
     </div>
@@ -34,7 +34,7 @@ const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(
 
     <div v-if="subs.length" class="mt-2.5">
       <div class="h-1.5 overflow-hidden rounded-full bg-line">
-        <div class="h-full rounded-full bg-accent" :style="{ width: (subsDone / subs.length) * 100 + '%' }" />
+        <div class="h-full rounded-full bg-accent transition-[width] duration-500" :style="{ width: (subsDone / subs.length) * 100 + '%' }" />
       </div>
     </div>
 
