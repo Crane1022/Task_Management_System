@@ -55,8 +55,11 @@ test('Super Private: a Director, manager or admin gets NO access from their job;
   assert.equal(workspaceRoleFor(open, 'dir', true), 'admin') // a normal workspace: a Director is still admin
   assert.equal(workspaceRoleFor(secret, 'dir', true), 'none') // a Super Private one: not even a Director
   assert.equal(workspaceRoleFor(secret, 'owner', false), 'admin')
-  assert.equal(workspaceRoleFor(secret, 'ana', false), 'member')
-  assert.equal(workspaceRoleFor(secret, 'vic', false), 'viewer')
+  assert.equal(workspaceRoleFor(secret, 'ana', false), 'admin') // in a Super Private workspace every member has the owner's powers
+  assert.equal(workspaceRoleFor(secret, 'nobody', false), 'none')
+  assert.equal(workspaceRoleFor(open, 'ana', false), 'member') // a normal workspace keeps the stored role
+  assert.equal(workspaceRoleFor(open, 'vic', false), 'none')
+  assert.equal(workspaceRoleFor(secret, 'vic', false), 'admin') // even someone stored as a viewer
   assert.equal(workspaceRoleFor(secret, 'mgr', false), 'none') // a manager who was not invited
   assert.equal(workspaceRoleFor({ members: {} }, 'dir', true), 'admin') // an existing workspace (no flag at all) stays as it was
   // and on the board level

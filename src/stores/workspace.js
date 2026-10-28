@@ -30,10 +30,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const roleIn = (ws) => workspaceRoleFor(ws, auth.user?.uid, auth.isAdmin)
   // this person's role on one board of a workspace (the workspace role, or the board's own role for them)
   const roleOnBoard = (ws, board) => effectiveBoardRole({
-    isDirector: auth.isAdmin, workspaceRole: ws?.members?.[auth.user?.uid], workspacePrivate: !!ws?.superPrivate, boardOverride: board?.members?.[auth.user?.uid],
+    isDirector: auth.isAdmin, workspaceRole: workspaceRoleFor(ws, auth.user?.uid, false), workspacePrivate: !!ws?.superPrivate, boardOverride: board?.members?.[auth.user?.uid],
   })
-  // can this person manage who is in the workspace? In a Super Private workspace only its owner can.
-  const canManageMembers = (ws) => !!ws && roleIn(ws) === 'admin' && (!ws.superPrivate || ws.createdBy === auth.user?.uid)
+  // can this person manage who is in the workspace? (admins; in a Super Private workspace that is every member)
+  const canManageMembers = (ws) => !!ws && roleIn(ws) === 'admin'
   const isOwner = (ws) => !!ws && ws.createdBy === auth.user?.uid
 
   function syncBoards(list) {

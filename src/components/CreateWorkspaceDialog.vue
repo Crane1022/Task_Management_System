@@ -52,7 +52,7 @@ async function submit() {
           <input v-model="form.superPrivate" type="checkbox" class="mt-0.5 accent-[var(--accent)]" />
           <span>
             <span class="flex items-center gap-1 text-sm font-bold"><Lock class="h-3.5 w-3.5" />Super Private Workspace</span>
-            <span class="mt-0.5 block text-xs text-muted">Only you (the owner) and the people you add can open it, its boards and its tasks. Directors, Department Managers and admins get no access from their job. Nobody else can add members.</span>
+            <span class="mt-0.5 block text-xs text-muted">Only you (the owner) and the people you add can open it, its boards and its tasks. Directors, Department Managers and admins get no access from their job. Everyone you add gets the same powers as you inside it, including adding members.</span>
           </span>
         </label>
       </div>

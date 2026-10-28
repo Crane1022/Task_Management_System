@@ -119,7 +119,7 @@ async function adopt() {
           <h1 class="truncate text-xl font-extrabold">{{ ws.name }}</h1>
           <p v-if="ws.description" class="mt-0.5 text-sm text-muted">{{ ws.description }}</p>
           <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold">
-            <span v-if="ws.superPrivate" class="flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-accent" title="Only the owner and the people the owner added can open this workspace. A job title does not give access."><Lock class="h-3 w-3" />Super Private</span>
+            <span v-if="ws.superPrivate" class="flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-accent" title="Only the people added to this workspace can open it, and each has the owner's powers here. A job title does not give access."><Lock class="h-3 w-3" />Super Private</span>
             <span v-else class="flex items-center gap-1 rounded-full bg-bg px-2.5 py-1 text-muted" title="Members of this workspace, and Directors, can see it"><Lock class="h-3 w-3" />Members only</span>
             <span v-if="store.isOwner(ws)" class="rounded-full bg-bg px-2.5 py-1 text-muted">You are the owner</span>
             <span class="rounded-full bg-accent-soft px-2.5 py-1 text-accent">You: {{ roleName(store.roleIn(ws)) }}</span>
@@ -194,15 +194,14 @@ async function adopt() {
             <button class="btn-primary" :disabled="saving">{{ saving ? 'Saving…' : 'Save settings' }}</button>
           </form>
 
-          <div v-if="store.isOwner(ws)" class="mt-4 rounded-2xl border border-line bg-surface p-4">
+          <div v-if="store.isOwner(ws) || (ws.superPrivate && canManage)" class="mt-4 rounded-2xl border border-line bg-surface p-4">
             <label class="flex cursor-pointer items-start gap-2.5">
               <input type="checkbox" class="mt-0.5 accent-[var(--accent)]" :checked="!!ws.superPrivate" @change="askPrivacy($event)" />
               <span><span class="flex items-center gap-1 text-sm font-extrabold"><Lock class="h-3.5 w-3.5" />Super Private Workspace</span>
-                <span class="mt-0.5 block text-sm text-muted">Only you and the people you add can open this workspace, its boards, tasks, comments and attachments. Directors, Department Managers and admins get no access from their job, and only you can add or remove members.</span></span>
+                <span class="mt-0.5 block text-sm text-muted">Only the people added can open this workspace, its boards, tasks, comments and attachments. Directors, Department Managers and admins get no access from their job. Every member has the owner's powers inside it.</span></span>
             </label>
           </div>
-          <p v-else-if="ws.superPrivate" class="mt-4 rounded-2xl border border-line bg-surface p-4 text-sm text-muted"><b class="text-ink">Super Private.</b> Only the owner can change this.</p>
-
+          
           <div v-if="auth.isAdmin && !mainExists && !ws.superPrivate" class="mt-4 rounded-2xl border border-line bg-surface p-4">
             <h2 class="text-sm font-extrabold">Add the original Main board</h2>
             <p class="mt-1 text-sm text-muted">The Main board is where today's tasks live (and where the PMS link creates tasks). Adding it puts it in this workspace without moving or copying any task. <b class="text-ink">From then on, only members of this workspace can open it</b>, instead of people being limited to their own department.</p>

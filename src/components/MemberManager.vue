@@ -51,7 +51,7 @@ async function confirmRemove() { await store.kick(props.workspace, remove.value.
 
 <template>
   <section>
-    <p v-if="workspace.superPrivate" class="mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface p-3 text-sm text-muted"><Lock class="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span><b class="text-ink">Super Private.</b> Only the owner and the people listed here can open this workspace. {{ canManage ? 'You are the owner, so you decide who is in.' : 'Only the owner can add or remove people.' }}</span></p>
+    <p v-if="workspace.superPrivate" class="mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface p-3 text-sm text-muted"><Lock class="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span><b class="text-ink">Super Private.</b> Only the people listed here can open this workspace, and every one of them has the owner's powers here. The owner always stays in.</span></p>
     <div v-if="canManage" class="rounded-2xl border border-line bg-surface p-4">
       <h3 class="flex items-center gap-2 text-sm font-extrabold"><UserPlus class="h-4 w-4 text-accent" />Add a member</h3>
       <p class="mt-1 text-xs text-muted">Choose from people who already have a Widebed account (they sign in with their PMS login).</p>

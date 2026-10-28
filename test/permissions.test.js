@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { effectiveBoardRole, legacyBoardRole, canEdit, canManage, leavesAnAdmin } from '../src/utils/permissions.js'
+import { effectiveBoardRole, legacyBoardRole, canEdit, canManage, leavesAnAdmin, workspaceRoleFor } from '../src/utils/permissions.js'
 
 test('a Director is admin on every board, even without being a member', () => {
   assert.equal(effectiveBoardRole({ isDirector: true, workspaceRole: 'none' }), 'admin')
@@ -35,4 +35,11 @@ test('a workspace can never lose its last admin', () => {
   assert.equal(leavesAnAdmin(members, 'a', null), false)
   assert.equal(leavesAnAdmin(members, 'b', null), true)
   assert.equal(leavesAnAdmin({ a: 'admin', c: 'admin' }, 'a', null), true)
+})
+
+test('Super Private: every member counts as admin on every board, whatever the board says; a normal workspace is unchanged', () => {
+  const secret = { superPrivate: true, members: { m: 'viewer' } }
+  const normal = { superPrivate: false, members: { m: 'viewer' } }
+  assert.equal(effectiveBoardRole({ workspaceRole: workspaceRoleFor(secret, 'm', false), workspacePrivate: true, boardOverride: 'viewer' }), 'admin')
+  assert.equal(effectiveBoardRole({ workspaceRole: workspaceRoleFor(normal, 'm', false), boardOverride: 'viewer' }), 'viewer')
 })

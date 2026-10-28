@@ -11,7 +11,7 @@ import { subscribeUsers } from '@/services/userService'
 import { subscribeBoardDoc, subscribeWorkspace } from '@/services/workspaceService'
 import { startOfToday } from '@/utils/dates'
 import { STEP, byPosition, positionBetween, mergeColumnOrder } from '@/utils/ordering'
-import { effectiveBoardRole, legacyBoardRole, canEdit as roleCanEdit, canManage as roleCanManage } from '@/utils/permissions'
+import { effectiveBoardRole, legacyBoardRole, workspaceRoleFor, canEdit as roleCanEdit, canManage as roleCanManage } from '@/utils/permissions'
 import { MAIN_BOARD, mergeTasks, mainColumnFor, unplaced, ownColumnFor, columnByStatus, destinations as buildDestinations } from '@/utils/aggregate'
 import { BOARD_ID } from '@/utils/constants'
 
@@ -67,7 +67,7 @@ export const useBoardStore = defineStore('board', () => {
     if (workspaceDenied.value) return 'none' // a workspace this person cannot read (Super Private): no access
     return effectiveBoardRole({
       isDirector: auth.isAdmin,
-      workspaceRole: workspace.value?.members?.[auth.user?.uid],
+      workspaceRole: workspaceRoleFor(workspace.value, auth.user?.uid, false), // (a member of a Super Private workspace counts as admin)
       workspacePrivate: !!workspace.value?.superPrivate,
       boardOverride: boardDoc.value?.members?.[auth.user?.uid],
     })

@@ -20,8 +20,13 @@ export function effectiveBoardRole({ isDirector, workspaceRole, workspacePrivate
 
 // A board with no board document is the original department board (id "main"): it keeps its old rules.
 // The role a person has in a workspace as a whole (a Director counts as admin, except in Super Private workspaces)
-export const workspaceRoleFor = (workspace, uid, isDirector) =>
-  (isDirector && !workspace?.superPrivate ? 'admin' : workspace?.members?.[uid] ?? 'none')
+// In a Super Private workspace EVERY member has the owner's powers (admin). In any other workspace the stored role counts.
+export const workspaceRoleFor = (workspace, uid, isDirector) => {
+  if (isDirector && !workspace?.superPrivate) return 'admin'
+  const stored = workspace?.members?.[uid]
+  if (!stored) return 'none'
+  return workspace.superPrivate ? 'admin' : stored
+}
 
 export const legacyBoardRole = ({ isDirector, canManage }) => (isDirector || canManage ? 'admin' : 'member')
 

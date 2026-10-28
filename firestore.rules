@@ -23,7 +23,11 @@ service cloud.firestore {
     function wsIsPrivate(w) { return w.get('superPrivate', false) == true; }
     // 'admin' | 'member' | 'viewer' | 'none'. A Director counts as admin of every workspace EXCEPT Super Private ones:
     // a job title (Director, Department Manager, Admin) never opens a Super Private workspace.
-    function wsRoleOf(w) { return (isAdmin() && !wsIsPrivate(w)) ? 'admin' : w.members.get(request.auth.uid, 'none'); }
+    // In a Super Private workspace EVERY member has the owner's powers (admin); in any other workspace the stored role counts.
+    function wsRoleOf(w) {
+      return (isAdmin() && !wsIsPrivate(w)) ? 'admin'
+        : (wsIsPrivate(w) && request.auth.uid in w.members) ? 'admin' : w.members.get(request.auth.uid, 'none');
+    }
     function wsRole(wid) { return wsRoleOf(wsData(wid)); }
     // A workspace admin is admin on every board of the workspace; otherwise the board's own role for the person
     // (set by a board admin) or their workspace role.
@@ -206,16 +210,13 @@ service cloud.firestore {
         && nameOk(request.resource.data)
         && request.resource.data.get('superPrivate', false) is bool
         && membersOk(request.resource.data) && hasAdmin(request.resource.data)
-        // only the owner turns Super Private on or off
-        && (wsIsPrivate(request.resource.data) == wsIsPrivate(resource.data) || resource.data.createdBy == request.auth.uid)
-        // in a Super Private workspace only the owner changes who the members are
-        && ((!wsIsPrivate(resource.data) && !wsIsPrivate(request.resource.data))
-            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['members', 'memberIds'])
-            || resource.data.createdBy == request.auth.uid)
-        // and the owner always stays an admin member of their own Super Private workspace
+        // only the owner turns Super Private ON for a normal workspace; once it is Super Private, any of its members may change members or turn it off
+        && (wsIsPrivate(request.resource.data) == wsIsPrivate(resource.data) || wsIsPrivate(resource.data) || resource.data.createdBy == request.auth.uid)
+        // the one thing members cannot do to each other: the owner always stays an admin member of their own Super Private workspace
         && (!wsIsPrivate(request.resource.data) || request.resource.data.members.get(request.resource.data.createdBy, 'none') == 'admin');
       // Workspaces are archived, not deleted. Only the owner, or a Director for a workspace that is not Super Private, can remove one.
-      allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid || (isAdmin() && !wsIsPrivate(resource.data)));
+      allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid || (isAdmin() && !wsIsPrivate(resource.data))
+        || (wsIsPrivate(resource.data) && request.auth.uid in resource.data.memberIds));
 
       // ----- team chat: ONLY in a Super Private workspace, and ONLY for its members (a Director's bypass does not apply) -----
       // "Everyone" channel = workspaces/{wid}/messages. Group chats and direct messages = workspaces/{wid}/chats/{cid} (+ /messages),
@@ -243,7 +244,7 @@ service cloud.firestore {
         allow read: if chatMember();
         allow create: if hasProfile() && chatMember() && messageOk();
         // you delete your own message; a workspace admin deletes any
-        allow delete: if chatMember() && (resource.data.userId == request.auth.uid || wsData(wid).members.get(request.auth.uid, 'none') == 'admin');
+        allow delete: if chatMember() && (resource.data.userId == request.auth.uid || wsRoleOf(wsData(wid)) == 'admin');
       }
 
       match /chats/{cid} {
