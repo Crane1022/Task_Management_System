@@ -218,6 +218,8 @@ service cloud.firestore {
       allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid || (isAdmin() && !wsIsPrivate(resource.data)));
 
       // ----- team chat: ONLY in a Super Private workspace, and ONLY for its members (a Director's bypass does not apply) -----
+      // "Everyone" channel = workspaces/{wid}/messages. Group chats and direct messages = workspaces/{wid}/chats/{cid} (+ /messages),
+      // visible only to the people listed in the chat's memberIds, who must also still be members of the workspace.
       function chatMember() {
         return signedIn() && wsData(wid).get('superPrivate', false) == true && request.auth.uid in wsData(wid).get('memberIds', []);
       }
@@ -227,10 +229,8 @@ service cloud.firestore {
           && (('emoji' in s && s.emoji is string && s.emoji.size() > 0 && s.emoji.size() <= 16)
               || ('url' in s && s.url is string && s.url.matches('^https://[^ ]{4,490}$'))));
       }
-      match /messages/{mid} {
-        allow read: if chatMember();
-        allow create: if hasProfile() && chatMember()
-          && request.resource.data.keys().hasOnly(['text', 'userId', 'userName', 'createdAt', 'mentions', 'sticker'])
+      function messageOk() {
+        return request.resource.data.keys().hasOnly(['text', 'userId', 'userName', 'createdAt', 'mentions', 'sticker'])
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.userName in [profile().get('displayName', ''), profile().get('name', '')]
           && request.resource.data.createdAt == request.time
@@ -238,8 +238,43 @@ service cloud.firestore {
           && (request.resource.data.get('text', '').size() > 0 || request.resource.data.keys().hasAny(['sticker']))
           && request.resource.data.get('mentions', []) is list && request.resource.data.get('mentions', []).size() <= 10
           && stickerOk(request.resource.data.get('sticker', null));
+      }
+      match /messages/{mid} {
+        allow read: if chatMember();
+        allow create: if hasProfile() && chatMember() && messageOk();
         // you delete your own message; a workspace admin deletes any
         allow delete: if chatMember() && (resource.data.userId == request.auth.uid || wsData(wid).members.get(request.auth.uid, 'none') == 'admin');
+      }
+
+      match /chats/{cid} {
+        // people in a chat must be members of the workspace; a group has 2 to 50 people, a direct message exactly 2
+        function chatShapeOk(d) {
+          return d.memberIds is list && d.memberIds.size() >= 2 && d.memberIds.size() <= 50
+            && d.memberIds.hasOnly(wsData(wid).get('memberIds', []))
+            && request.auth.uid in d.memberIds
+            && d.type in ['group', 'dm']
+            && (d.type == 'group' ? (d.name is string && d.name.size() > 0 && d.name.size() <= 60) : d.memberIds.size() == 2);
+        }
+        allow read: if chatMember() && request.auth.uid in resource.data.memberIds;
+        allow create: if hasProfile() && chatMember()
+          && request.resource.data.keys().hasOnly(['type', 'name', 'memberIds', 'createdBy', 'createdAt'])
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && chatShapeOk(request.resource.data);
+        // only the person who made a group renames it or changes who is in it (a direct message never changes)
+        allow update: if chatMember() && resource.data.type == 'group' && resource.data.createdBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'memberIds'])
+          && chatShapeOk(request.resource.data);
+        allow delete: if chatMember() && resource.data.createdBy == request.auth.uid;
+
+        match /messages/{mid} {
+          function inChat() { return chatMember() && request.auth.uid in get(/databases/$(database)/documents/workspaces/$(wid)/chats/$(cid)).data.memberIds; }
+          allow read: if inChat();
+          allow create: if hasProfile() && inChat() && messageOk();
+          // your own message, or any message in a chat you made
+          allow delete: if inChat() && (resource.data.userId == request.auth.uid
+            || get(/databases/$(database)/documents/workspaces/$(wid)/chats/$(cid)).data.createdBy == request.auth.uid);
+        }
       }
     }
 

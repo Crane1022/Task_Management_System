@@ -133,16 +133,44 @@ export const subscribeBoardDoc = (bid, onData, onError) => onSnapshot(doc(db, 'b
 export const subscribeWorkspace = (wid, onData, onError) => onSnapshot(doc(db, 'workspaces', wid), (snap) => onData(one(snap)), onError)
 
 // ----- team chat (Super Private workspaces only; firestore.rules enforce it) -----
-// workspaces/{id}/messages/{id}  { text, userId, userName, createdAt }. Shows the newest 200.
-export const subscribeChat = (wid, onData, onError) =>
-  onSnapshot(query(collection(db, 'workspaces', wid, 'messages'), orderBy('createdAt', 'desc'), limit(200)),
+//   workspaces/{id}/messages                  the "Everyone" channel
+//   workspaces/{id}/chats/{chatId}            { type: 'group' | 'dm', name, memberIds, createdBy, createdAt }
+//   workspaces/{id}/chats/{chatId}/messages   { text, mentions, sticker, userId, userName, createdAt }
+// chatId '' means the Everyone channel. Each list shows the newest 200 messages.
+const messagesOf = (wid, cid) => (cid ? collection(db, 'workspaces', wid, 'chats', cid, 'messages') : collection(db, 'workspaces', wid, 'messages'))
+export const subscribeChat = (wid, cid, onData, onError) =>
+  onSnapshot(query(messagesOf(wid, cid), orderBy('createdAt', 'desc'), limit(200)),
     (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()), onError)
 // message = { text, mentions: [uid], sticker: { emoji } | { url } | null }
-export const sendChat = (wid, message, user) => addDoc(collection(db, 'workspaces', wid, 'messages'), {
+export const sendChat = (wid, cid, message, user) => addDoc(messagesOf(wid, cid), {
   text: (message.text ?? '').trim(), userId: user.id, userName: user.displayName || user.name || '', createdAt: serverTimestamp(),
   ...(message.mentions?.length ? { mentions: message.mentions } : {}),
   ...(message.sticker ? { sticker: message.sticker } : {}),
 })
+export const deleteMessage = (wid, cid, id) => deleteDoc(doc(messagesOf(wid, cid), id))
+
+// the group chats and DMs this person is in
+export const subscribeChats = (wid, uid, onData, onError) =>
+  onSnapshot(query(collection(db, 'workspaces', wid, 'chats'), where('memberIds', 'array-contains', uid)),
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError)
+// A group: addDoc. A DM: a fixed id (see utils/chats.js dmId), so the same two people share one conversation.
+export async function createChat(wid, { type, name = '', memberIds }, user, fixedId = '') {
+  const data = { type, memberIds, createdBy: user.id, createdAt: serverTimestamp(), ...(type === 'group' ? { name: name.trim() } : {}) }
+  if (fixedId) { await setDoc(doc(db, 'workspaces', wid, 'chats', fixedId), data); return fixedId }
+  return (await addDoc(collection(db, 'workspaces', wid, 'chats'), data)).id
+}
+export const updateChat = (wid, cid, changes) => updateDoc(doc(db, 'workspaces', wid, 'chats', cid), changes)
+// Deletes the conversation with its messages (the messages first, while the chat still exists for the rules)
+export async function deleteConversation(wid, cid) {
+  const snap = await getDocs(messagesOf(wid, cid))
+  for (let i = 0; i < snap.docs.length; i += 400) {
+    const batch = writeBatch(db)
+    snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+  }
+  await deleteDoc(doc(db, 'workspaces', wid, 'chats', cid))
+}
+
 // ----- my own stickers: links to pictures, saved for me in users/{uid}/stickers -----
 export const subscribeStickers = (uid, onData, onError) =>
   onSnapshot(collection(db, 'users', uid, 'stickers'), (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (x.createdAt?.seconds ?? 1e12) - (y.createdAt?.seconds ?? 1e12))), onError)

@@ -14,7 +14,7 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import BoardCard from '@/components/BoardCard.vue'
 import CreateBoardDialog from '@/components/CreateBoardDialog.vue'
 import MemberManager from '@/components/MemberManager.vue'
-import WorkspaceChat from '@/components/WorkspaceChat.vue'
+import WorkspaceChatHub from '@/components/WorkspaceChatHub.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 // Workspace overview (Boards tab), Members tab and Settings tab. Which tab is decided by the route.
@@ -173,7 +173,7 @@ async function adopt() {
 
       <!-- ===== Chat (Super Private workspaces only) ===== -->
       <section v-else-if="tab === 'chat'" class="mt-5">
-        <WorkspaceChat v-if="ws.superPrivate && ws.members?.[auth.user?.uid]" :workspace-id="ws.id" :workspace="ws" :users="users" :is-admin="store.roleIn(ws) === 'admin'" />
+        <WorkspaceChatHub v-if="ws.superPrivate && ws.members?.[auth.user?.uid]" :workspace="ws" :users="users" :is-admin="store.roleIn(ws) === 'admin'" />
         <p v-else class="rounded-xl border border-line bg-surface p-4 text-sm text-muted">Chat is only available in Super Private workspaces, to the people who were added to them.</p>
       </section>
 

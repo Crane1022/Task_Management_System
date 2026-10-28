@@ -3,7 +3,7 @@ vi.mock('@/firebase/sdk', () => ({ Timestamp: class {} }))
 vi.mock('@/firebase/config', () => ({ db: {}, auth: {} }))
 const { sendChat, addSticker, state } = vi.hoisted(() => ({ sendChat: vi.fn(async () => ({})), addSticker: vi.fn(async () => ({})), state: { push: null, stickers: null } }))
 vi.mock('@/services/workspaceService', () => ({
-  subscribeChat: (wid, onData) => { state.push = onData; return () => {} },
+  subscribeChat: (wid, cid, onData) => { state.push = onData; return () => {} },
   subscribeStickers: (uid, onData) => { state.stickers = onData; return () => {} },
   sendChat, addSticker, deleteChat: vi.fn(async () => {}), deleteSticker: vi.fn(async () => {}),
 }))
@@ -39,7 +39,7 @@ describe('workspace chat', () => {
     await w.get('[role=option] button').trigger('mousedown')
     await ta.trigger('keydown', { key: 'Enter' }) // picker closed now: Enter sends
     await flushPromises()
-    expect(sendChat).toHaveBeenCalledWith('w1', { text: 'hi @Alice Tan', mentions: ['u2'] }, expect.anything())
+    expect(sendChat).toHaveBeenCalledWith('w1', '', { text: 'hi @Alice Tan', mentions: ['u2'] }, expect.anything())
   })
   it('adds an emoji at the caret and sends a built-in sticker', async () => {
     const w = make(); sendChat.mockClear()
@@ -49,7 +49,7 @@ describe('workspace chat', () => {
     await w.get('button[aria-label="Stickers"]').trigger('click')
     await w.findAll('button').find((b) => b.attributes('aria-label') === 'Send sticker 🎉').trigger('click')
     await flushPromises()
-    expect(sendChat).toHaveBeenCalledWith('w1', { text: '', sticker: { emoji: '🎉' } }, expect.anything())
+    expect(sendChat).toHaveBeenCalledWith('w1', '', { text: '', sticker: { emoji: '🎉' } }, expect.anything())
   })
   it('saves a sticker from a link, refuses a bad one, and lists saved ones', async () => {
     const w = make(); addSticker.mockClear()

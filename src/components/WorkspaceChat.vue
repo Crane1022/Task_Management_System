@@ -4,16 +4,16 @@ import { Send, Trash2, Lock, Smile, X, Plus } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useNotificationStore } from '@/stores/notifications'
-import { subscribeChat, sendChat, deleteChat, subscribeStickers, addSticker, deleteSticker } from '@/services/workspaceService'
+import { subscribeChat, sendChat, deleteMessage, subscribeStickers, addSticker, deleteSticker } from '@/services/workspaceService'
 import { formatDateTime } from '@/utils/dates'
 import { displayOf } from '@/utils/constants'
 import { activeQuery, insertMention, resolveMentions, splitMentions } from '@/utils/mentions'
 import { EMOJI_GROUPS, BUILT_IN_STICKERS, MAX_MY_STICKERS, insertAt, stickerUrl } from '@/utils/stickers'
 import UserAvatar from './UserAvatar.vue'
 
-// The team chat of a Super Private workspace: @tags, emoji, stickers and your own saved stickers.
-// Only members can read or write (firestore.rules).
-const props = defineProps({ workspaceId: String, workspace: Object, users: { type: Object, default: () => ({}) }, isAdmin: Boolean })
+// One conversation of a Super Private workspace (the Everyone channel, a group or a DM): @tags, emoji, stickers and your own saved stickers.
+// Only its people can read or write (firestore.rules). `chat` = the group/DM document, or null for the Everyone channel.
+const props = defineProps({ workspaceId: String, workspace: Object, chat: { type: Object, default: null }, users: { type: Object, default: () => ({}) }, isAdmin: Boolean })
 const auth = useAuthStore()
 const ui = useUiStore()
 const notify = useNotificationStore()
@@ -28,7 +28,7 @@ const MAX = 1000
 
 let unsub, unsubStickers
 onMounted(() => {
-  unsub = subscribeChat(props.workspaceId, (m) => { messages.value = m; loading.value = false }, () => { failed.value = true; loading.value = false })
+  unsub = subscribeChat(props.workspaceId, props.chat?.id ?? '', (m) => { messages.value = m; loading.value = false }, () => { failed.value = true; loading.value = false })
   if (auth.user?.uid) unsubStickers = subscribeStickers(auth.user.uid, (s) => (mine.value = s), () => {})
 })
 onUnmounted(() => { unsub?.(); unsubStickers?.() })
@@ -40,7 +40,7 @@ const isMine = (m) => m.userId === auth.user?.uid
 const caret = ref(0)
 const picked = ref([])
 const hi = ref(0)
-const people = computed(() => Object.keys(props.workspace?.members ?? {})
+const people = computed(() => (props.chat ? props.chat.memberIds : Object.keys(props.workspace?.members ?? {}))
   .filter((id) => id !== auth.user?.uid && props.users[id]).map((id) => ({ ...props.users[id], id })))
 const query = computed(() => activeQuery(text.value, caret.value))
 const matches = computed(() => {
@@ -93,7 +93,7 @@ async function deliver(message) {
   if (busy.value) return
   busy.value = true
   try {
-    await sendChat(props.workspaceId, message, auth.profile)
+    await sendChat(props.workspaceId, props.chat?.id ?? '', message, auth.profile)
     if (message.mentions?.length && props.workspace) notify.chatMention(props.workspace, message.text, message.mentions) // best effort
     return true
   } catch (e) { ui.toast(`Could not send: ${e.code ?? e.message}`, 'error') }
@@ -106,13 +106,13 @@ async function send() {
   if (ok) { text.value = ''; picked.value = []; panel.value = '' }
 }
 async function sendSticker(sticker) { if (await deliver({ text: '', sticker })) panel.value = '' }
-const remove = (m) => deleteChat(props.workspaceId, m.id).catch((e) => ui.toast(`Could not delete: ${e.code ?? e.message}`, 'error'))
+const remove = (m) => deleteMessage(props.workspaceId, props.chat?.id ?? '', m.id).catch((e) => ui.toast(`Could not delete: ${e.code ?? e.message}`, 'error'))
 const broken = ref(new Set())
 </script>
 
 <template>
-  <section class="flex h-[min(36rem,72vh)] flex-col rounded-2xl border border-line bg-surface" aria-label="Team chat">
-    <p class="flex items-center gap-1.5 border-b border-line px-4 py-2 text-xs font-bold text-muted"><Lock class="h-3.5 w-3.5" />Private chat. Only the members of this Super Private workspace can read it.</p>
+  <section class="flex min-h-0 flex-1 flex-col" aria-label="Chat">
+    <p class="flex items-center gap-1.5 border-b border-line px-4 py-2 text-xs font-bold text-muted"><Lock class="h-3.5 w-3.5" />{{ chat ? (chat.type === 'dm' ? 'Direct message. Only the two of you can read it.' : 'Group chat. Only the people in this group can read it.') : 'Everyone channel. All members of this Super Private workspace can read it.' }}</p>
     <div ref="list" class="flex-1 space-y-3 overflow-y-auto px-4 py-3">
       <p v-if="loading" class="text-sm text-muted">Loading…</p>
       <p v-else-if="failed" class="text-sm font-semibold text-red-600" role="alert">The chat could not be loaded.</p>
