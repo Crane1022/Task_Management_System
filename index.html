@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Widebed Tasks</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      // Re-apply the last theme before the first paint so there is no flash of the wrong colours
+      try {
+        var c = JSON.parse(localStorage.getItem('wb-theme-cache') || 'null')
+        if (c) {
+          var r = document.documentElement
+          if (c.mode === 'dark') r.classList.add('dark')
+          if (c.reduceMotion) r.classList.add('reduce-motion')
+          for (var k in c.vars) r.style.setProperty(k, c.vars[k])
+          r.style.fontSize = (16 * c.fontScale / 100) + 'px'
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

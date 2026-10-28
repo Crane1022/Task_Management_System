@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isAdmin() { return hasProfile() && profile().role == 'super_admin'; }
+    function isManager() { return hasProfile() && profile().role == 'dept_manager'; }
+    function myDept() { return profile().departmentId; }
+    function inMyDept(dept) { return hasProfile() && myDept() == dept; }
+
+    // ---------- users ----------
+    // Staff sign in with their PMS account. Profiles are created only by the sign-in function
+    // (api/pms-login.js, Admin SDK, which skips these rules), so browsers can never create one.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if false;
+      // A Super Admin sets department and role (Staff page), but can't change their own role (no lock-out).
+      allow update: if (isAdmin()
+          && request.resource.data.role in ['super_admin', 'dept_manager', 'employee']
+          && (uid != request.auth.uid || request.resource.data.role == resource.data.role))
+        // Anyone else may only touch harmless fields of their own profile
+        || (signedIn() && request.auth.uid == uid
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'departmentId', 'pmsRole', 'email', 'stub']));
+      allow delete: if isAdmin();
+    }
+
+    // ---------- board columns ----------
+    match /columns/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() || isManager();
+      // Only a Super Admin can delete: they can see (and move) the tasks of every department
+      allow delete: if isAdmin();
+    }
+
+    // ---------- tasks ----------
+    match /tasks/{id} {
+      allow read: if signedIn() && (isAdmin()
+        || inMyDept(resource.data.departmentId)
+        || request.auth.uid in resource.data.assignedTo);
+
+      allow create: if hasProfile()
+        && request.resource.data.createdBy == request.auth.uid
+        && (isAdmin() || inMyDept(request.resource.data.departmentId));
+
+      allow update: if hasProfile() && (
+        isAdmin()
+        || (isManager() && inMyDept(resource.data.departmentId) && inMyDept(request.resource.data.departmentId))
+        || (inMyDept(resource.data.departmentId)
+            && request.resource.data.departmentId == resource.data.departmentId
+            && (request.auth.uid in resource.data.assignedTo || resource.data.createdBy == request.auth.uid)));
+
+      allow delete: if hasProfile() && (
+        isAdmin()
+        || (isManager() && inMyDept(resource.data.departmentId))
+        || resource.data.createdBy == request.auth.uid);
+    }
+
+    // ---------- activity log: append-only ----------
+    match /task_activities/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---------- appearance settings: private to their owner ----------
+    match /users/{uid}/settings/{docId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- background images (small, already shrunk): private to their owner ----------
+    match /users/{uid}/backgrounds/{imageId} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 900000;
+    }
+
+    // ---------- dashboards: private to their owner ----------
+    match /dashboards/{id} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ---------- reserved for the next phases ----------
+    match /{collection}/{id} {
+      allow read, write: if false;
+    }
+  }
+}

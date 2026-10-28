@@ -1,0 +1,285 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isAdmin() { return hasProfile() && profile().role == 'super_admin'; }
+    function isManager() { return hasProfile() && profile().role == 'dept_manager'; }
+    function myDept() { return profile().departmentId; }
+    function inMyDept(dept) { return hasProfile() && myDept() == dept; }
+
+    // ---------- helpers: workspaces and boards ----------
+    // A board WITHOUT a board document (today: "main", also used by the PMS link) keeps the original department
+    // rules below. A board WITH a document is a workspace board: access comes from workspace membership.
+    function wsPath(wid) { return /databases/$(database)/documents/workspaces/$(wid); }
+    function boardPath(bid) { return /databases/$(database)/documents/boards/$(bid); }
+    function taskPath(tid) { return /databases/$(database)/documents/tasks/$(tid); }
+    function boardExists(bid) { return exists(boardPath(bid)); }
+    function wsData(wid) { return get(wsPath(wid)).data; }
+    // A SUPER PRIVATE workspace: only its owner (createdBy) and the people the owner added get in.
+    function wsIsPrivate(w) { return w.get('superPrivate', false) == true; }
+    // 'admin' | 'member' | 'viewer' | 'none'. A Director counts as admin of every workspace EXCEPT Super Private ones:
+    // a job title (Director, Department Manager, Admin) never opens a Super Private workspace.
+    function wsRoleOf(w) { return (isAdmin() && !wsIsPrivate(w)) ? 'admin' : w.members.get(request.auth.uid, 'none'); }
+    function wsRole(wid) { return wsRoleOf(wsData(wid)); }
+    // A workspace admin is admin on every board of the workspace; otherwise the board's own role for the person
+    // (set by a board admin) or their workspace role.
+    function boardRole(bid) {
+      let b = get(boardPath(bid)).data;
+      let r = wsRole(b.workspaceId);
+      return r == 'none' ? 'none' : (r == 'admin' ? 'admin' : b.get('members', {}).get(request.auth.uid, r));
+    }
+    function boardWorkspacePrivate(bid) { return wsIsPrivate(wsData(get(boardPath(bid)).data.workspaceId)); }
+    function membersOk(w) {
+      return w.members.keys().toSet() == w.memberIds.toSet()
+        && w.members.values().hasOnly(['admin', 'member', 'viewer']);
+    }
+    function hasAdmin(w) { return w.members.values().hasAny(['admin']); }
+    function nameOk(d) { return d.name is string && d.name.size() > 0 && d.name.size() <= 80; }
+
+    // ---------- helpers: tasks (t = the task's data) ----------
+    // Original board: a Director, the same department, or an assignee. Workspace board: any member of the workspace
+    // (a viewer too), or an assignee unless the workspace is Super Private.
+    function canReadTask(t) {
+      return (boardExists(t.boardId)
+              && (boardRole(t.boardId) != 'none'
+                  || (request.auth.uid in t.assignedTo && !boardWorkspacePrivate(t.boardId))))
+          || (!boardExists(t.boardId)
+              && (isAdmin() || inMyDept(t.departmentId) || request.auth.uid in t.assignedTo));
+    }
+    function canEditTask(t) {
+      return (boardExists(t.boardId) && boardRole(t.boardId) in ['admin', 'member'])
+          || (!boardExists(t.boardId) && (isAdmin() || inMyDept(t.departmentId)));
+    }
+    // viewers of a workspace board read only; on the original board anyone who can read a task may comment
+    function canCommentTask(t) {
+      return boardExists(t.boardId) ? boardRole(t.boardId) in ['admin', 'member'] : canReadTask(t);
+    }
+    function canModerateTask(t) {
+      return boardExists(t.boardId) ? boardRole(t.boardId) == 'admin' : (isAdmin() || (isManager() && inMyDept(t.departmentId)));
+    }
+    // a task may only be put on a board where the person may add tasks
+    function canPlaceTask(d) {
+      return (boardExists(d.boardId) && boardRole(d.boardId) in ['admin', 'member'])
+          || (!boardExists(d.boardId) && (isAdmin() || inMyDept(d.departmentId)));
+    }
+    // a stored workspaceId must be the real workspace of the task's board (it cannot be faked)
+    function workspaceStampOk(d) {
+      return !boardExists(d.boardId)
+          || d.get('workspaceId', get(boardPath(d.boardId)).data.workspaceId) == get(boardPath(d.boardId)).data.workspaceId;
+    }
+    // Fields only a Director may change on a task (who created it, where it came from in the PMS)
+    function changesLockedTaskField() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['createdBy', 'createdByName', 'pmsLink', 'pmsKey', 'source']);
+    }
+    // the task's activity counter only ever goes up by one, together with a new activity record
+    function seqStepOk() {
+      return request.resource.data.get('activitySeq', 0) in [resource.data.get('activitySeq', 0), resource.data.get('activitySeq', 0) + 1];
+    }
+
+    // ---------- users ----------
+    // Staff sign in with their PMS account. Profiles are created only by the sign-in function
+    // (api/pms-login.js, Admin SDK, which skips these rules), so browsers can never create one.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if false;
+      // A Super Admin sets department, role, employee ID and job position (Staff page), but can't change their own role (no lock-out).
+      allow update: if (isAdmin()
+          && request.resource.data.role in ['super_admin', 'dept_manager', 'employee']
+          && (uid != request.auth.uid || request.resource.data.role == resource.data.role))
+        // Everyone else may change ONLY these fields of their own profile (an allow-list, so company-controlled
+        // fields such as role, department, employee ID and job position can never be self-edited)
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photo', 'timezone', 'landingPage'])
+            && request.resource.data.get('displayName', '').size() <= 60
+            && request.resource.data.get('timezone', '').size() <= 60
+            && request.resource.data.get('photo', '').size() < 40000
+            && request.resource.data.get('landingPage', 'dashboard') in ['dashboard', 'board', 'list', 'my-tasks']);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- board columns ----------
+    match /columns/{id} {
+      allow read: if signedIn()
+        && (!boardExists(resource.data.boardId) || boardRole(resource.data.boardId) != 'none');
+      allow create: if hasProfile() && (
+        (boardExists(request.resource.data.boardId) && boardRole(request.resource.data.boardId) == 'admin')
+        || (!boardExists(request.resource.data.boardId) && (isAdmin() || isManager())));
+      allow update: if hasProfile() && request.resource.data.boardId == resource.data.boardId && (
+        (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) == 'admin')
+        || (!boardExists(resource.data.boardId) && (isAdmin() || isManager())));
+      // Original board: only a Super Admin (they can see, and so move, the tasks of every department).
+      // Workspace board: a board admin, who can see every task on it.
+      allow delete: if hasProfile() && (
+        (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) == 'admin')
+        || (!boardExists(resource.data.boardId) && isAdmin()));
+    }
+
+    // ---------- tasks ----------
+    match /tasks/{id} {
+      allow read: if signedIn() && canReadTask(resource.data);
+
+      allow create: if hasProfile()
+        && request.resource.data.createdBy == request.auth.uid
+        && (isAdmin() || !request.resource.data.keys().hasAny(['pmsLink', 'pmsKey', 'source']))
+        && canPlaceTask(request.resource.data)
+        && workspaceStampOk(request.resource.data)
+        && request.resource.data.get('activitySeq', 0) in [0, 1]
+        && request.resource.data.get('attachments', []).size() <= 30;
+
+      // Moving a task to another board needs the right to add tasks on BOTH boards (so a Super Private workspace stays closed).
+      allow update: if hasProfile() && (isAdmin() || !changesLockedTaskField())
+        && seqStepOk()
+        && request.resource.data.get('attachments', []).size() <= 30
+        && (request.resource.data.boardId == resource.data.boardId || canPlaceTask(request.resource.data))
+        && workspaceStampOk(request.resource.data)
+        && (
+          (boardExists(resource.data.boardId) && boardRole(resource.data.boardId) in ['admin', 'member'])
+          || (!boardExists(resource.data.boardId) && (
+            isAdmin()
+            || (isManager() && inMyDept(resource.data.departmentId) && inMyDept(request.resource.data.departmentId))
+            || (inMyDept(resource.data.departmentId)
+                && request.resource.data.departmentId == resource.data.departmentId
+                && (request.auth.uid in resource.data.assignedTo || resource.data.createdBy == request.auth.uid)))));
+
+      allow delete: if hasProfile() && (
+        (boardExists(resource.data.boardId) && (boardRole(resource.data.boardId) == 'admin'
+          || (boardRole(resource.data.boardId) == 'member' && resource.data.createdBy == request.auth.uid)))
+        || (!boardExists(resource.data.boardId) && (
+          isAdmin()
+          || (isManager() && inMyDept(resource.data.departmentId))
+          || resource.data.createdBy == request.auth.uid)));
+    }
+
+    // ---------- task comments: they follow the task, so anyone who cannot read the task cannot read its comments ----------
+    match /tasks/{tid}/comments/{cid} {
+      allow read: if signedIn() && exists(taskPath(tid)) && canReadTask(get(taskPath(tid)).data);
+      allow create: if hasProfile() && exists(taskPath(tid)) && canCommentTask(get(taskPath(tid)).data)
+        && request.resource.data.keys().hasOnly(['text', 'userId', 'userName', 'createdAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userName in [profile().get('displayName', ''), profile().get('name', '')]
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000;
+      // an author edits only the text of their own comment
+      allow update: if hasProfile() && exists(taskPath(tid)) && canCommentTask(get(taskPath(tid)).data)
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+        && request.resource.data.get('editedAt', request.time) == request.time
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000;
+      // the author, a moderator of the task, or anyone once the task itself is gone (cleaning up)
+      allow delete: if hasProfile() && (
+        !existsAfter(taskPath(tid))
+        || (exists(taskPath(tid)) && (resource.data.userId == request.auth.uid || canModerateTask(get(taskPath(tid)).data))));
+    }
+
+    // ---------- workspaces: members (uid -> role) live on the workspace document ----------
+    match /workspaces/{wid} {
+      // A Director sees every workspace except Super Private ones they were not added to.
+      allow read: if signedIn() && (request.auth.uid in resource.data.memberIds
+        || (isAdmin() && !wsIsPrivate(resource.data)));
+      // Directors and Department Managers create workspaces; the creator becomes the OWNER and must be an admin of it
+      allow create: if hasProfile() && (isAdmin() || isManager())
+        && request.resource.data.createdBy == request.auth.uid
+        && nameOk(request.resource.data)
+        && request.resource.data.get('superPrivate', false) is bool
+        && membersOk(request.resource.data) && hasAdmin(request.resource.data)
+        && request.resource.data.members.get(request.auth.uid, 'none') == 'admin';
+      allow update: if hasProfile()
+        && wsRoleOf(resource.data) == 'admin'
+        && request.resource.data.createdBy == resource.data.createdBy
+        && nameOk(request.resource.data)
+        && request.resource.data.get('superPrivate', false) is bool
+        && membersOk(request.resource.data) && hasAdmin(request.resource.data)
+        // only the owner turns Super Private on or off
+        && (wsIsPrivate(request.resource.data) == wsIsPrivate(resource.data) || resource.data.createdBy == request.auth.uid)
+        // in a Super Private workspace only the owner changes who the members are
+        && ((!wsIsPrivate(resource.data) && !wsIsPrivate(request.resource.data))
+            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['members', 'memberIds'])
+            || resource.data.createdBy == request.auth.uid)
+        // and the owner always stays an admin member of their own Super Private workspace
+        && (!wsIsPrivate(request.resource.data) || request.resource.data.members.get(request.resource.data.createdBy, 'none') == 'admin');
+      // Workspaces are archived, not deleted. Only the owner, or a Director for a workspace that is not Super Private, can remove one.
+      allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid || (isAdmin() && !wsIsPrivate(resource.data)));
+    }
+
+    // ---------- boards ----------
+    match /boards/{bid} {
+      // resource == null: asking whether a board document exists (for "main" it does not, yet)
+      allow read: if signedIn() && (resource == null || wsRole(resource.data.workspaceId) != 'none');
+      // Workspace admins create boards. Only a Director may put the original board "main" into a workspace.
+      allow create: if hasProfile()
+        && request.resource.data.createdBy == request.auth.uid
+        && nameOk(request.resource.data)
+        && (bid != 'main' || isAdmin())
+        && wsRole(request.resource.data.workspaceId) == 'admin';
+      // Workspace admins and board admins (a board-level role) manage the board and its members
+      allow update: if hasProfile()
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && nameOk(request.resource.data)
+        && (wsRole(resource.data.workspaceId) == 'admin'
+            || (wsRole(resource.data.workspaceId) != 'none' && resource.data.get('members', {}).get(request.auth.uid, 'none') == 'admin'));
+      allow delete: if hasProfile() && wsRole(resource.data.workspaceId) == 'admin';
+    }
+
+    // ---------- activity log: at most 15 records per task ----------
+    // A record's ID is "<taskId>_<slot>" with slot 0..14 (slot = (seq - 1) % 15), so a task can never hold more than
+    // 15 records: the 16th overwrites the oldest one. A record is only accepted when the task's counter (activitySeq)
+    // moves up by exactly 1 in the SAME write, which also means two people saving at the same moment cannot both claim
+    // the same record. The write is allowed only if the person was allowed to write the task itself.
+    // (Records written before this rule have random IDs; they can be read, and removed once they are beyond the newest 15.)
+    function isSlotId(id) { return id.matches('^[^_]+_([0-9]|1[0-4])$'); }
+    function slotOk(id, d) {
+      let p = id.split('_');
+      return p.size() == 2 && p[0] == d.taskId && d.seq is int && d.seq >= 1 && p[1] == string((d.seq - 1) % 15);
+    }
+    function seqAdvanced(tid, seq) {
+      return existsAfter(taskPath(tid))
+        && getAfter(taskPath(tid)).data.get('activitySeq', 0) == seq
+        && seq == (exists(taskPath(tid)) ? get(taskPath(tid)).data.get('activitySeq', 0) : 0) + 1;
+    }
+    match /task_activities/{id} {
+      allow read: if signedIn() && exists(taskPath(resource.data.taskId)) && canReadTask(get(taskPath(resource.data.taskId)).data);
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && slotOk(id, request.resource.data)
+        && seqAdvanced(request.resource.data.taskId, request.resource.data.seq);
+      allow delete: if signedIn() && (
+        !existsAfter(taskPath(resource.data.taskId))
+        || (!isSlotId(id) && exists(taskPath(resource.data.taskId)) && canEditTask(get(taskPath(resource.data.taskId)).data)));
+    }
+
+
+    // ---------- appearance settings: private to their owner ----------
+    match /users/{uid}/settings/{docId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- background images (small, already shrunk): private to their owner ----------
+    match /users/{uid}/backgrounds/{imageId} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 900000;
+    }
+
+    // ---------- dashboards: private to their owner ----------
+    match /dashboards/{id} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ---------- reserved for the next phases ----------
+    match /{collection}/{id} {
+      allow read, write: if false;
+    }
+  }
+}
