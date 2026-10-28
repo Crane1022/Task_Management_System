@@ -14,6 +14,7 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import BoardCard from '@/components/BoardCard.vue'
 import CreateBoardDialog from '@/components/CreateBoardDialog.vue'
 import MemberManager from '@/components/MemberManager.vue'
+import WorkspaceChat from '@/components/WorkspaceChat.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 // Workspace overview (Boards tab), Members tab and Settings tab. Which tab is decided by the route.
@@ -132,7 +133,7 @@ async function adopt() {
       </header>
 
       <nav class="mt-5 flex gap-1 border-b border-line" aria-label="Workspace sections">
-        <router-link v-for="t in [{ to: `/workspaces/${ws.id}`, label: 'Boards', key: 'boards' }, { to: `/workspaces/${ws.id}/members`, label: 'Members', key: 'members' }, { to: `/workspaces/${ws.id}/settings`, label: 'Settings', key: 'settings' }]"
+        <router-link v-for="t in [{ to: `/workspaces/${ws.id}`, label: 'Boards', key: 'boards' }, { to: `/workspaces/${ws.id}/members`, label: 'Members', key: 'members' }, ...(ws.superPrivate ? [{ to: `/workspaces/${ws.id}/chat`, label: 'Chat', key: 'chat' }] : []), { to: `/workspaces/${ws.id}/settings`, label: 'Settings', key: 'settings' }]"
           :key="t.key" :to="t.to" class="-mb-px border-b-2 px-3 py-2 text-sm font-bold" :class="tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'">{{ t.label }}</router-link>
       </nav>
 
@@ -169,6 +170,12 @@ async function adopt() {
 
       <!-- ===== Members ===== -->
       <section v-else-if="tab === 'members'" class="mt-5"><MemberManager :workspace="ws" :can-manage="store.canManageMembers(ws)" /></section>
+
+      <!-- ===== Chat (Super Private workspaces only) ===== -->
+      <section v-else-if="tab === 'chat'" class="mt-5">
+        <WorkspaceChat v-if="ws.superPrivate && ws.members?.[auth.user?.uid]" :workspace-id="ws.id" :workspace="ws" :users="users" :is-admin="store.roleIn(ws) === 'admin'" />
+        <p v-else class="rounded-xl border border-line bg-surface p-4 text-sm text-muted">Chat is only available in Super Private workspaces, to the people who were added to them.</p>
+      </section>
 
       <!-- ===== Settings ===== -->
       <section v-else class="mt-5 max-w-xl">

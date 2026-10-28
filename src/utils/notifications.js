@@ -15,7 +15,7 @@ export function buildNotification(type, by, { task = null, workspace = null, bod
   const title = {
     assigned: `${who} assigned you a task`,
     comment: `${who} commented on a task of yours`,
-    mention: `${who} mentioned you in a comment`,
+    mention: workspace ? `${who} mentioned you in the team chat` : `${who} mentioned you in a comment`,
     moved: `${who} moved a task`,
     completed: `${who} completed a task`,
     workspace_added: `${who} added you to a workspace`,

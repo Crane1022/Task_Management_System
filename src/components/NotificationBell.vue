@@ -24,6 +24,7 @@ async function go(n) {
   open.value = false
   store.read(n)
   if (n.taskId) router.push({ path: `/b/${n.boardId || 'main'}`, query: { task: n.taskId } })
+  else if (n.type === 'mention' && n.workspaceId) router.push(`/workspaces/${n.workspaceId}/chat`) // tagged in the team chat
   else if (n.workspaceId && n.type !== 'workspace_removed') router.push(`/workspaces/${n.workspaceId}`)
 }
 </script>

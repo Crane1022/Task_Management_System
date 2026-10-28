@@ -13,6 +13,7 @@ const router = createRouter({
     // Workspaces: each one holds boards. meta.tab picks the tab; meta.page is the key used for per-page themes.
     { path: '/workspaces/:wid', name: 'workspace', component: () => import('@/views/WorkspaceView.vue'), meta: { tab: 'boards', page: 'workspace' } },
     { path: '/workspaces/:wid/members', name: 'workspace-members', component: () => import('@/views/WorkspaceView.vue'), meta: { tab: 'members', page: 'workspace' } },
+    { path: '/workspaces/:wid/chat', name: 'workspace-chat', component: () => import('@/views/WorkspaceView.vue'), meta: { tab: 'chat', page: 'workspace' } },
     { path: '/workspaces/:wid/settings', name: 'workspace-settings', component: () => import('@/views/WorkspaceView.vue'), meta: { tab: 'settings', page: 'workspace' } },
     // A specific board (the Kanban page then shows it; /board shows the board you opened last, "main" at first)
     { path: '/b/:bid', name: 'board-by-id', component: () => import('@/views/BoardView.vue'), meta: { tasks: true, page: 'board' } },

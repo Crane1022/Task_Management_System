@@ -1,6 +1,6 @@
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, onSnapshot, query, where,
-  serverTimestamp, arrayUnion, arrayRemove, deleteField,
+  serverTimestamp, arrayUnion, arrayRemove, deleteField, orderBy, limit, addDoc,
 } from '@/firebase/sdk'
 import { db } from '@/firebase/config'
 import { DEFAULT_COLUMNS } from '@/utils/constants'
@@ -131,3 +131,21 @@ export async function loadBoardPreview(bid) {
 const one = (snap) => (snap.exists() ? { id: snap.id, ...snap.data() } : null)
 export const subscribeBoardDoc = (bid, onData, onError) => onSnapshot(doc(db, 'boards', bid), (snap) => onData(one(snap)), onError)
 export const subscribeWorkspace = (wid, onData, onError) => onSnapshot(doc(db, 'workspaces', wid), (snap) => onData(one(snap)), onError)
+
+// ----- team chat (Super Private workspaces only; firestore.rules enforce it) -----
+// workspaces/{id}/messages/{id}  { text, userId, userName, createdAt }. Shows the newest 200.
+export const subscribeChat = (wid, onData, onError) =>
+  onSnapshot(query(collection(db, 'workspaces', wid, 'messages'), orderBy('createdAt', 'desc'), limit(200)),
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()), onError)
+// message = { text, mentions: [uid], sticker: { emoji } | { url } | null }
+export const sendChat = (wid, message, user) => addDoc(collection(db, 'workspaces', wid, 'messages'), {
+  text: (message.text ?? '').trim(), userId: user.id, userName: user.displayName || user.name || '', createdAt: serverTimestamp(),
+  ...(message.mentions?.length ? { mentions: message.mentions } : {}),
+  ...(message.sticker ? { sticker: message.sticker } : {}),
+})
+// ----- my own stickers: links to pictures, saved for me in users/{uid}/stickers -----
+export const subscribeStickers = (uid, onData, onError) =>
+  onSnapshot(collection(db, 'users', uid, 'stickers'), (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (x.createdAt?.seconds ?? 1e12) - (y.createdAt?.seconds ?? 1e12))), onError)
+export const addSticker = (uid, url) => addDoc(collection(db, 'users', uid, 'stickers'), { url, createdAt: serverTimestamp() })
+export const deleteSticker = (uid, id) => deleteDoc(doc(db, 'users', uid, 'stickers', id))
+export const deleteChat = (wid, id) => deleteDoc(doc(db, 'workspaces', wid, 'messages', id))

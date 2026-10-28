@@ -216,6 +216,31 @@ service cloud.firestore {
         && (!wsIsPrivate(request.resource.data) || request.resource.data.members.get(request.resource.data.createdBy, 'none') == 'admin');
       // Workspaces are archived, not deleted. Only the owner, or a Director for a workspace that is not Super Private, can remove one.
       allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid || (isAdmin() && !wsIsPrivate(resource.data)));
+
+      // ----- team chat: ONLY in a Super Private workspace, and ONLY for its members (a Director's bypass does not apply) -----
+      function chatMember() {
+        return signedIn() && wsData(wid).get('superPrivate', false) == true && request.auth.uid in wsData(wid).get('memberIds', []);
+      }
+      // a sticker is an emoji, or a link to a picture on the web (an https address). Never picture data.
+      function stickerOk(s) {
+        return s == null || (s is map && s.keys().size() == 1
+          && (('emoji' in s && s.emoji is string && s.emoji.size() > 0 && s.emoji.size() <= 16)
+              || ('url' in s && s.url is string && s.url.matches('^https://[^ ]{4,490}$'))));
+      }
+      match /messages/{mid} {
+        allow read: if chatMember();
+        allow create: if hasProfile() && chatMember()
+          && request.resource.data.keys().hasOnly(['text', 'userId', 'userName', 'createdAt', 'mentions', 'sticker'])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.userName in [profile().get('displayName', ''), profile().get('name', '')]
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.get('text', '') is string && request.resource.data.get('text', '').size() <= 1000
+          && (request.resource.data.get('text', '').size() > 0 || request.resource.data.keys().hasAny(['sticker']))
+          && request.resource.data.get('mentions', []) is list && request.resource.data.get('mentions', []).size() <= 10
+          && stickerOk(request.resource.data.get('sticker', null));
+        // you delete your own message; a workspace admin deletes any
+        allow delete: if chatMember() && (resource.data.userId == request.auth.uid || wsData(wid).members.get(request.auth.uid, 'none') == 'admin');
+      }
     }
 
     // ---------- boards ----------
@@ -286,6 +311,15 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
         && request.resource.data.read is bool;
       allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- my chat stickers (links to pictures): private to their owner ----------
+    match /users/{uid}/stickers/{sid} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['url', 'createdAt'])
+        && request.resource.data.url is string && request.resource.data.url.matches('^https://[^ ]{4,490}$')
+        && request.resource.data.createdAt == request.time;
     }
 
     // ---------- appearance settings: private to their owner ----------

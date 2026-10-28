@@ -52,8 +52,9 @@ export const useNotificationStore = defineStore('notifications', () => {
     send('comment', taskAudience(task, me()?.id, mentionIds).filter((id) => canSeeTask(users[id] && { ...users[id], id }, task, ws)), { task, body: text }),
   ])
   const taskMoved = (task, columnName, isDone) => send(isDone ? 'completed' : 'moved', taskAudience(task, me()?.id), { task, body: `${task.title} → ${columnName}` })
+  const chatMention = (workspace, text, uids) => send('mention', uids, { workspace, body: text })
   const workspaceAdded = (workspace, uids) => send('workspace_added', uids, { workspace, body: workspace.name })
   const workspaceRemoved = (workspace, uids) => send('workspace_removed', uids, { workspace, body: workspace.name })
 
-  return { items, loading, failed, unread, start, stop, read, readAll, clear, remove, taskAssigned, commentPosted, taskMoved, workspaceAdded, workspaceRemoved }
+  return { items, loading, failed, unread, start, stop, read, readAll, clear, remove, taskAssigned, commentPosted, taskMoved, chatMention, workspaceAdded, workspaceRemoved }
 })
