@@ -37,3 +37,25 @@ Do step 2 BEFORE steps 3 and 4: the new Director workspace listing relies on the
 ## Manual checks still needed in a real browser
 Drag and drop (cards and columns), touch drag, the Main Board with several workspaces, Super Private with two real accounts (owner, member, Director),
 dark mode on every page, and mobile layout. jsdom cannot check these.
+
+## Notifications and @mentions (the bell)
+
+The bell sits in the top bar on every page. Each person has their own list at `users/{uid}/notifications` (newest 50 are kept).
+
+| Notification | Made by |
+| --- | --- |
+| A task is assigned to you | the app, when a task is created or its assignees change |
+| Comment on your task | the app, when someone comments on a task you are assigned to or created |
+| @mention in a comment | the app; type `@` in a comment, pick a name. A mentioned person gets this instead of the plain comment notice |
+| Task moved / completed | the app, on drag-and-drop, the status dropdown and "move to board" (to the assignees and creator) |
+| Added to / removed from a workspace | the app, from the Members tab |
+| Due today / due tomorrow / overdue | `api/deadline-reminders.js`, run once a day by Vercel Cron (09:00 Malaysia time) |
+
+You never get a notification for your own action. Clicking one opens the task (`/b/<board>?task=<id>`) or the workspace.
+
+**To switch it on** (nothing here is done for you):
+1. Publish `firestore.rules` (new `users/{uid}/notifications` rules; comments may now carry `mentions`).
+2. Deploy `api/` and `vercel.json`.
+3. In Vercel add the environment variable `CRON_SECRET` (any long random string; Vercel Cron sends it as a Bearer token). Optional: `REMINDER_UTC_OFFSET_HOURS` (default 8).
+
+Not built: e-mail. It needs a mail provider and its key. Notifications are best effort: if one cannot be saved, the task action still succeeds.

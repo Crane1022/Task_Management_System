@@ -187,7 +187,7 @@ function submit() {
         <template v-if="t">
           <TaskAttachments :task-id="t.id" :attachments="(liveTask ?? t).attachments ?? []" :can-edit="!readonly" />
           <TaskMove v-if="!readonly" :destinations="destinations" :current-board-id="t.boardId" :load-columns="loadColumns" @move="(d, c) => emit('move', d, c)" />
-          <TaskComments :task-id="t.id" :users="users" :can-comment="!readonly" :can-moderate="canModerate" />
+          <TaskComments :task-id="t.id" :users="users" :can-comment="!readonly" :can-moderate="canModerate" :task="liveTask ?? t" />
           <TaskActivity :task-id="t.id" />
         </template>
       </fieldset>

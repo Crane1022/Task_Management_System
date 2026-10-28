@@ -170,7 +170,8 @@ service cloud.firestore {
     match /tasks/{tid}/comments/{cid} {
       allow read: if signedIn() && exists(taskPath(tid)) && canReadTask(get(taskPath(tid)).data);
       allow create: if hasProfile() && exists(taskPath(tid)) && canCommentTask(get(taskPath(tid)).data)
-        && request.resource.data.keys().hasOnly(['text', 'userId', 'userName', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['text', 'userId', 'userName', 'createdAt', 'mentions'])
+        && request.resource.data.get('mentions', []) is list && request.resource.data.get('mentions', []).size() <= 10
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.userName in [profile().get('displayName', ''), profile().get('name', '')]
         && request.resource.data.createdAt == request.time
@@ -265,6 +266,27 @@ service cloud.firestore {
         || (!isSlotId(id) && exists(taskPath(resource.data.taskId)) && canEditTask(get(taskPath(resource.data.taskId)).data)));
     }
 
+
+    // ---------- notifications (the bell): each person has their own list ----------
+    // Anyone signed in may add one for ANOTHER person, but only as themselves (byId is checked) and only in the allowed shape.
+    // The owner reads their list, marks a notification read (only the `read` field can change) and deletes.
+    match /users/{uid}/notifications/{nid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if hasProfile() && request.auth.uid != uid
+        && request.resource.data.keys().hasOnly(['type', 'title', 'body', 'taskId', 'boardId', 'workspaceId', 'byId', 'byName', 'read', 'createdAt'])
+        && request.resource.data.keys().hasAll(['type', 'title', 'byId', 'read', 'createdAt'])
+        && request.resource.data.type in ['assigned', 'comment', 'mention', 'moved', 'completed', 'workspace_added', 'workspace_removed']
+        && request.resource.data.byId == request.auth.uid
+        && request.resource.data.byName in [profile().get('displayName', ''), profile().get('name', '')]
+        && request.resource.data.read == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.title is string && request.resource.data.title.size() <= 160
+        && request.resource.data.get('body', '') is string && request.resource.data.get('body', '').size() <= 220;
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read is bool;
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
 
     // ---------- appearance settings: private to their owner ----------
     match /users/{uid}/settings/{docId} {

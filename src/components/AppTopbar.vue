@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Sun, Moon, Menu, Search, Plus, UserRound, Palette, LogOut, PawPrint } from 'lucide-vue-next'
 import UserAvatar from '@/components/UserAvatar.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -32,7 +33,8 @@ async function signOut() { menu.value = false; await auth.logout(); router.push(
     </template>
     <span class="flex-1" />
 
-    <!-- far right, the same on every page: dark mode, then the profile -->
+    <!-- far right, the same on every page: notifications, dark mode, then the profile -->
+    <NotificationBell />
     <button class="btn-ghost px-2.5" :title="ui.dark ? 'Light mode' : 'Dark mode'" :aria-label="ui.dark ? 'Switch to light mode' : 'Switch to dark mode'" @click="theme.toggleDark()">
       <component :is="ui.dark ? Sun : Moon" class="h-4 w-4" />
     </button>

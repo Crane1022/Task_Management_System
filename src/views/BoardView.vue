@@ -29,6 +29,17 @@ const editor = reactive(useTaskEditor())
 const newColumn = ref('')
 const columnToDelete = ref(null)
 const columnToArchive = ref(null)
+// A notification links here with ?task=<id>: open that task once the board has loaded it
+// (the page is re-created whenever the address changes, so this runs once per click; `handled` stops later task updates reopening it)
+let handled = !route.query.task
+watch([() => board.tasks, () => board.loading], () => {
+  if (handled || board.loading) return
+  handled = true
+  const t = board.tasks.find((x) => x.id === route.query.task)
+  if (t) editor.openTask(t)
+  else ui.toast('That task is not on this board any more, or you can no longer open it', 'error')
+  window.history.replaceState(window.history.state, '', route.path) // drop ?task= from the address bar without reloading the page
+})
 const doneChange = ref(null) // { column, changes } waiting for confirmation
 const showArchived = ref(false)
 

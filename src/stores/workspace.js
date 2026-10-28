@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
+import { useNotificationStore } from './notifications'
 import * as svc from '@/services/workspaceService'
 import { leavesAnAdmin, workspaceRoleFor, effectiveBoardRole } from '@/utils/permissions'
 
@@ -9,6 +10,7 @@ import { leavesAnAdmin, workspaceRoleFor, effectiveBoardRole } from '@/utils/per
 export const useWorkspaceStore = defineStore('workspace', () => {
   const auth = useAuthStore()
   const ui = useUiStore()
+  const notif = useNotificationStore()
 
   const workspaces = ref([])
   const boards = ref({}) // workspaceId -> boards
@@ -94,14 +96,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ui.toast(on ? 'This workspace is now Super Private' : 'This workspace is no longer Super Private')
     return true
   }, 'Could not change the privacy of the workspace')
-  const addMembers = (ws, roles) => run(async () => { await svc.setMembers(ws.id, roles); ui.toast('Members updated'); return true }, 'Could not update members')
+  const addMembers = (ws, roles) => run(async () => {
+    await svc.setMembers(ws.id, roles)
+    notif.workspaceAdded(ws, Object.keys(roles).filter((uid) => !(ws.members ?? {})[uid])) // only people who were not members before
+    ui.toast('Members updated')
+    return true
+  }, 'Could not update members')
   const changeRole = (ws, uid, role) => {
     if (!leavesAnAdmin(ws.members, uid, role)) { ui.toast('A workspace needs at least one admin', 'error'); return }
     return run(async () => { await svc.setMembers(ws.id, { [uid]: role }); ui.toast('Role changed'); return true }, 'Could not change the role')
   }
   const kick = (ws, uid) => {
     if (!leavesAnAdmin(ws.members, uid, null)) { ui.toast('A workspace needs at least one admin', 'error'); return }
-    return run(async () => { await svc.removeMember(ws.id, uid); ui.toast('Member removed'); return true }, 'Could not remove the member')
+    return run(async () => { await svc.removeMember(ws.id, uid); notif.workspaceRemoved(ws, [uid]); ui.toast('Member removed'); return true }, 'Could not remove the member')
   }
 
   const addBoard = (wid, data) => run(async () => {

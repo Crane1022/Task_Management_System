@@ -202,8 +202,11 @@ export function subscribeComments(taskId, onData, onError) {
     onData(rows(snap).sort((a, b) => (a.createdAt?.seconds ?? Infinity) - (b.createdAt?.seconds ?? Infinity)))
   }, onError)
 }
-export const addComment = (taskId, text, user) =>
-  addDoc(commentsRef(taskId), { text: text.trim(), userId: user.id, userName: displayOf(user), createdAt: serverTimestamp() })
+// `mentions` = ids of the people tagged with @ (left out when nobody is tagged)
+export const addComment = (taskId, text, user, mentions = []) =>
+  addDoc(commentsRef(taskId), {
+    text: text.trim(), userId: user.id, userName: displayOf(user), createdAt: serverTimestamp(), ...(mentions.length ? { mentions } : {}),
+  })
 export const editComment = (taskId, commentId, text) =>
   updateDoc(doc(db, 'tasks', taskId, 'comments', commentId), { text: text.trim(), editedAt: serverTimestamp() })
 export const deleteComment = (taskId, commentId) => deleteDoc(doc(db, 'tasks', taskId, 'comments', commentId))

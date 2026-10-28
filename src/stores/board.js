@@ -4,6 +4,7 @@ import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
 import { useCompanionStore } from './companion'
 import { useWorkspaceStore } from './workspace'
+import { useNotificationStore } from './notifications'
 import { subscribeColumns, fetchColumns, createColumn, renameColumn, deleteColumn, seedDefaultColumns, updateColumn, reorderColumns } from '@/services/columnService'
 import { subscribeBoardTasks, createTask, updateTask, moveTask, moveTaskToBoard, deleteTask, moveAllTasks } from '@/services/taskService'
 import { subscribeUsers } from '@/services/userService'
@@ -26,6 +27,7 @@ export const useBoardStore = defineStore('board', () => {
   const ui = useUiStore()
   const companion = useCompanionStore()
   const wsStore = useWorkspaceStore()
+  const notif = useNotificationStore()
 
   const boardId = ref(BOARD_ID)
   const boardDoc = ref(null) // null = original board, or not resolved yet
@@ -270,7 +272,8 @@ export const useBoardStore = defineStore('board', () => {
     const column = columnsFor(destBoardId).find((c) => c.id === columnId)
     if (!column) { ui.toast('Choose a column for the task', 'error'); return }
     const workspaceId = destBoardId === boardId.value ? boardDoc.value?.workspaceId ?? null : wsStore.boardById(destBoardId)?.workspaceId ?? null
-    await createTask(data, column, endPosition(columnId), auth.profile, workspaceId)
+    const id = await createTask(data, column, endPosition(columnId), auth.profile, workspaceId)
+    notif.taskAssigned({ id, title: data.title, boardId: destBoardId, workspaceId }, data.assignedTo ?? [])
     ui.toast('Task created')
     companion.react('created')
   }, 'Could not create task')
@@ -279,10 +282,12 @@ export const useBoardStore = defineStore('board', () => {
     const column = columnsFor(task.boardId).find((c) => c.id === changes.columnId)
     if (column) { // moved from the status dropdown (a column of the task's own board)
       await moveTask(task, column, endPosition(column.id), auth.profile)
+      if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
       if (column.isDone && task.columnId !== column.id) companion.react('completed')
       delete changes.columnId
     }
     if (Object.keys(changes).length) await updateTask(task.id, changes, notes, auth.profile)
+    if (changes.assignedTo) notif.taskAssigned(task, changes.assignedTo.filter((id) => !(task.assignedTo ?? []).includes(id)))
     ui.toast('Task saved')
   }, 'Could not save task')
 
@@ -295,6 +300,7 @@ export const useBoardStore = defineStore('board', () => {
     if (!column) { ui.toast('That board has no columns yet', 'error'); return false }
     const known = tasks.value.some((t) => t.columnId === column.id)
     await moveTaskToBoard(task, dest, column, known ? endPosition(column.id) : Date.now(), auth.profile)
+    notif.taskMoved(task, `${dest.label} › ${column.name}`, column.isDone)
     if (column.isDone) companion.react('completed')
     ui.toast(`Moved to ${dest.label}`)
     return true
@@ -322,6 +328,7 @@ export const useBoardStore = defineStore('board', () => {
     const position = positionBetween(prev?.position, next?.position)
     if (task.columnId === column.id && task.position === position) return
     await moveTask(task, column, position, auth.profile)
+    if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
     if (column.isDone && task.columnId !== column.id) companion.react('completed') // a card dropped into a completed column
   }, 'Could not move task', resetTasks)
 
