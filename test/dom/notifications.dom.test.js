@@ -70,3 +70,33 @@ describe('tagging in a comment', () => {
     w.unmount()
   })
 })
+
+describe('desktop pop-up made by the open app', () => {
+  const shown = []
+  const setup = (over = {}) => {
+    shown.length = 0
+    globalThis.Notification = { permission: over.permission ?? 'granted' }
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => over.visible ? 'visible' : 'hidden' })
+    document.hasFocus = () => !!over.visible
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { getRegistration: async () => ({ showNotification: async (t, o) => { shown.push([t, o]) } }) } })
+    localStorage.clear(); if (over.off) localStorage.setItem('wb-popups', 'off')
+    const w = mount(NotificationBell, { global: { plugins: [router] } })
+    return w
+  }
+  const n = (id, extra = {}) => ({ id, type: 'assigned', title: 'Ana assigned you a task', body: 'Fix it', taskId: 't1', boardId: 'main', read: false, createdAt: { seconds: 5, toMillis: () => Date.now() }, ...extra })
+
+  it('shows a pop-up for a NEW notification while the app is behind other windows, not for old ones', async () => {
+    setup()
+    push([n('a')]); await flushPromises() // what was already there: no pop-up
+    expect(shown).toHaveLength(0)
+    push([n('b'), n('a')]); await flushPromises()
+    expect(shown).toHaveLength(1)
+    expect(shown[0][0]).toBe('Ana assigned you a task'); expect(shown[0][1].tag).toBe('task-t1'); expect(shown[0][1].data.url).toBe('/b/main?task=t1')
+  })
+  it('stays quiet when the app is in front, when pop-ups are switched off, or when not allowed', async () => {
+    for (const over of [{ visible: true }, { off: true }, { permission: 'denied' }]) {
+      setup(over); push([]); await flushPromises(); push([n('x')]); await flushPromises()
+      expect(shown).toHaveLength(0)
+    }
+  })
+})

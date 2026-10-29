@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
 import * as svc from '@/services/notificationService'
-import { buildNotification, canSeeTask, taskAudience, unreadCount } from '@/utils/notifications'
+import { buildNotification, canSeeTask, taskAudience, unreadCount, linkFor, popTag, newForPopUp } from '@/utils/notifications'
 
 // The bell: this person's notifications (live), and the functions the rest of the app calls when something happens.
 export const useNotificationStore = defineStore('notifications', () => {
@@ -18,17 +18,35 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   const unread = computed(() => unreadCount(items.value))
 
+  // A pop-up on the desktop made by the open app itself: works while the app window is open anywhere (behind other windows,
+  // minimised, another tab), with no server. The server's push (api/send-push.js) covers the case where the app is closed.
+  // Never shown while the app is in front (the bell is right there), or if the person switched pop-ups off on this computer.
+  let seen = null // ids already known; null until the first snapshot (what was there before is not "new")
+  async function showLocal(n) {
+    try {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+      if (localStorage.getItem('wb-popups') === 'off') return
+      if (document.visibilityState === 'visible' && document.hasFocus()) return
+      const reg = await navigator.serviceWorker?.getRegistration('/sw.js')
+      if (!reg) return
+      await reg.showNotification(n.title, { body: n.body || '', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: popTag(n), data: { url: linkFor(n) } })
+    } catch { /* no pop-up is not an error */ }
+  }
+
   function start(uid) {
     if (!uid || uid === owner) return
     stop()
     owner = uid
     unsub = svc.subscribeNotifications(uid, (list) => {
+      const fresh = seen ? newForPopUp(list, seen) : []
+      seen = new Set(list.map((n) => n.id))
+      fresh.forEach(showLocal)
       items.value = list; loading.value = false; failed.value = false
       const extra = svc.surplus(list)
       if (extra.length && !pruned) { pruned = true; svc.removeMany(uid, extra).catch(() => {}).finally(() => { pruned = false }) }
     }, () => { failed.value = true; loading.value = false })
   }
-  function stop() { unsub?.(); unsub = null; owner = ''; items.value = []; loading.value = true; failed.value = false }
+  function stop() { unsub?.(); unsub = null; owner = ''; seen = null; items.value = []; loading.value = true; failed.value = false }
 
   const read = (n) => (n.read ? Promise.resolve() : svc.markRead(owner, n.id).catch(() => {}))
   const readAll = () => svc.markAllRead(owner, items.value.filter((n) => !n.read).map((n) => n.id)).catch(() => ui.toast('Could not mark them as read', 'error'))

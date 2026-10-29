@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildNotification, canSeeTask, taskAudience, unreadCount, newestFirst } from '../src/utils/notifications.js'
+import { buildNotification, canSeeTask, taskAudience, unreadCount, newestFirst, linkFor, popTag, newForPopUp } from '../src/utils/notifications.js'
 
 const by = { id: 'u1', displayName: 'Ana' }
 
@@ -52,4 +52,24 @@ test('unreadCount and newestFirst', () => {
   assert.equal(unreadCount([{ read: false }, { read: true }, {}]), 2)
   const list = newestFirst([{ id: 'a', createdAt: { seconds: 1 } }, { id: 'b', createdAt: { seconds: 5 } }, { id: 'c' }])
   assert.deepEqual(list.map((n) => n.id), ['c', 'b', 'a'], 'a just-written one (no server time yet) is newest')
+})
+
+test('linkFor and popTag match what the server uses for its pop-ups', async () => {
+  const { linkFor: serverLink } = await import('../api/_lib/push.js')
+  const samples = [{ taskId: 't 1', boardId: 'b1' }, { taskId: 't1' }, { type: 'mention', workspaceId: 'w1' }, { type: 'workspace_added', workspaceId: 'w1' }, { type: 'workspace_removed', workspaceId: 'w1' }, { type: 'deadline_soon' }]
+  for (const n of samples) assert.equal(linkFor(n), serverLink(n))
+  assert.equal(popTag({ taskId: 't1' }), 'task-t1'); assert.equal(popTag({ workspaceId: 'w1' }), 'ws-w1'); assert.equal(popTag({ type: 'x' }), 'x')
+})
+
+test('newForPopUp: only unseen, unread, fresh notifications', () => {
+  const now = 1_000_000_000
+  const at = (ms) => ({ toMillis: () => ms })
+  const list = [
+    { id: 'old', read: false, createdAt: at(now - 60_000) }, // already known
+    { id: 'new', read: false, createdAt: at(now - 5_000) },
+    { id: 'read', read: true, createdAt: at(now) },
+    { id: 'stale', read: false, createdAt: at(now - 10 * 60_000) },
+    { id: 'pending', read: false }, // just written, no server time yet
+  ]
+  assert.deepEqual(newForPopUp(list, new Set(['old']), now).map((n) => n.id), ['new', 'pending'])
 })

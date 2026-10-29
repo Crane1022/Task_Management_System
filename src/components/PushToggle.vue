@@ -14,6 +14,8 @@ const busy = ref(false)
 const blocked = ref(pushPermission() === 'denied')
 onMounted(async () => { if (supported) on.value = await pushIsOn(auth.user.uid) })
 
+// remembers the choice for the pop-ups the open app makes by itself (see stores/notifications.js)
+const setLocalFlag = (v) => { try { localStorage.setItem('wb-popups', v) } catch { /* private window */ } }
 const results = ref([])
 const testing = ref(false)
 async function test() {
@@ -27,8 +29,8 @@ async function toggle() {
   if (busy.value) return
   busy.value = true
   try {
-    if (on.value) { await disablePush(auth.user.uid); on.value = false; ui.toast('Desktop pop-ups are off on this computer') }
-    else { await enablePush(auth.user.uid); on.value = true; blocked.value = false; ui.toast('Desktop pop-ups are on for this computer') }
+    if (on.value) { setLocalFlag('off'); await disablePush(auth.user.uid); on.value = false; ui.toast('Desktop pop-ups are off on this computer') }
+    else { await enablePush(auth.user.uid); on.value = true; setLocalFlag('on'); blocked.value = false; ui.toast('Desktop pop-ups are on for this computer') }
   } catch (e) {
     blocked.value = pushPermission() === 'denied'
     ui.toast(e.message || 'Could not change desktop pop-ups', 'error')

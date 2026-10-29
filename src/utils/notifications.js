@@ -50,3 +50,19 @@ export function taskAudience(task, actorId, skip = []) {
 
 export const unreadCount = (items) => items.filter((n) => !n.read).length
 export const newestFirst = (items) => [...items].sort((a, b) => (b.createdAt?.seconds ?? Infinity) - (a.createdAt?.seconds ?? Infinity))
+
+// ----- desktop pop-up made by the open app itself (no server needed) -----
+// Where clicking the pop-up goes (the same pages the bell opens; api/_lib/push.js has the server's copy of this)
+export function linkFor(n) {
+  if (n.taskId) return `/b/${encodeURIComponent(n.boardId || 'main')}?task=${encodeURIComponent(n.taskId)}`
+  if (n.type === 'mention' && n.workspaceId) return `/workspaces/${encodeURIComponent(n.workspaceId)}/chat`
+  if (n.workspaceId && n.type !== 'workspace_removed') return `/workspaces/${encodeURIComponent(n.workspaceId)}`
+  return '/'
+}
+// the same label as the server's pop-up uses, so if both arrive the second REPLACES the first instead of showing twice
+export const popTag = (n) => (n.taskId ? `task-${n.taskId}` : n.workspaceId ? `ws-${n.workspaceId}` : String(n.type ?? 'n'))
+
+// Which notifications from a new snapshot deserve a pop-up: ones not seen before, unread, and fresh (a few minutes at most)
+export function newForPopUp(list, seen, now = Date.now(), maxAgeMs = 3 * 60 * 1000) {
+  return list.filter((n) => !seen.has(n.id) && !n.read && (n.createdAt?.toMillis ? now - n.createdAt.toMillis() <= maxAgeMs : true))
+}
