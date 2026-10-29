@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Paperclip, MessageSquare, CheckSquare, CalendarDays } from 'lucide-vue-next'
 import { priorityOf, deptName } from '@/utils/constants'
 import UserAvatar from './UserAvatar.vue'
+import LinkifiedText from './LinkifiedText.vue'
 import { formatDate, dueState } from '@/utils/dates'
 
 const props = defineProps({ task: Object, users: Object, boardLabel: { type: String, default: '' } })
@@ -24,7 +25,7 @@ const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(
 
     <p v-if="boardLabel" class="mb-1 truncate text-[10px] font-bold uppercase tracking-wide text-muted" :title="boardLabel">{{ boardLabel }}</p>
     <h3 class="text-sm font-bold leading-snug">{{ task.title }}</h3>
-    <p v-if="task.description" class="mt-1 line-clamp-2 text-xs text-muted">{{ task.description }}</p>
+    <p v-if="task.description" class="mt-1 line-clamp-2 text-xs text-muted"><LinkifiedText :text="task.description" /></p>
 
     <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
       <span class="rounded-md px-1.5 py-0.5" :class="priority.cls">{{ priority.name }}</span>

@@ -45,3 +45,39 @@ export function parseLink(input, name = '', serverHosts = []) {
   const label = String(name ?? '').trim().slice(0, 120) || nameFromUrl(u)
   return { url: u.href, name: label, provider: providerOf(u.hostname, serverHosts), kind: kindOf(label, u.pathname) }
 }
+
+// ----- links typed or pasted inside free text (a task description) -----
+const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"'`]+/gi
+// a closing bracket at the end belongs to the link only if the link opened one
+const trimLink = (raw) => {
+  let t = raw.replace(/[.,;:!?'"]+$/, '')
+  for (;;) {
+    const m = /[)\]}]$/.exec(t)
+    if (!m) break
+    const open = { ')': '(', ']': '[', '}': '{' }[m[0]]
+    if (t.split(m[0]).length > t.split(open).length) t = t.slice(0, -1).replace(/[.,;:!?'"]+$/, '')
+    else break
+  }
+  return t
+}
+
+// -> [{ text, href }] in order; `href` is null for plain text. Only safe http(s) links get an href.
+export function splitLinks(text) {
+  const src = String(text ?? '')
+  const out = []
+  let last = 0
+  for (const m of src.matchAll(URL_RE)) {
+    const link = trimLink(m[0])
+    let href = null
+    try { const u = new URL(/^www\./i.test(link) ? `https://${link}` : link); if (isSafeHref(u.href) && u.hostname.includes('.')) href = u.href } catch { href = null }
+    if (!href) continue
+    if (m.index > last) out.push({ text: src.slice(last, m.index), href: null })
+    out.push({ text: link, href })
+    last = m.index + link.length
+  }
+  if (last < src.length) out.push({ text: src.slice(last), href: null })
+  return out.length ? out : [{ text: src, href: null }]
+}
+
+// The distinct links in a text, in order of appearance
+export const linksIn = (text) => [...new Set(splitLinks(text).filter((p) => p.href).map((p) => p.href))]

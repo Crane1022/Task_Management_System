@@ -1,10 +1,12 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { X, Plus, Trash2 } from 'lucide-vue-next'
 import { PRIORITIES, DEPARTMENTS, displayOf } from '@/utils/constants'
 import { toInput, fromInput } from '@/utils/dates'
 import ConfirmDialog from './ConfirmDialog.vue'
 import TaskAttachments from './TaskAttachments.vue'
+import LinkifiedText from './LinkifiedText.vue'
+import DescriptionLinks from './DescriptionLinks.vue'
 import TaskComments from './TaskComments.vue'
 import TaskActivity from './TaskActivity.vue'
 import TaskMove from './TaskMove.vue'
@@ -44,6 +46,13 @@ const form = ref({
 })
 const newSub = ref('')
 const confirmDelete = ref(false)
+const editingDesc = ref(false)
+const descBox = ref(null)
+function startEditDesc() {
+  if (props.readonly) return
+  editingDesc.value = true
+  nextTick(() => descBox.value?.focus())
+}
 const error = ref('')
 
 // New task on the Main Board: which workspace board does it go to, and which status does that board offer?
@@ -136,7 +145,12 @@ function submit() {
         </div>
         <div>
           <label class="label" for="t-desc">Description</label>
-          <textarea id="t-desc" v-model="form.description" rows="3" class="input" />
+          <!-- with text in it, the description is shown with its links blue, underlined and clickable; click the text to edit it -->
+          <div v-if="form.description.trim() && !editingDesc" class="input min-h-[4.5rem] text-sm" :class="readonly ? 'cursor-default' : 'cursor-text'" :tabindex="readonly ? -1 : 0" :role="readonly ? undefined : 'button'" :aria-label="readonly ? undefined : 'Edit the description'"
+            @click="startEditDesc" @keydown.enter.self.prevent="startEditDesc"><LinkifiedText :text="form.description" /></div>
+          <textarea v-else-if="!readonly" id="t-desc" ref="descBox" v-model="form.description" rows="3" class="input" @blur="editingDesc = false" />
+          <p v-else class="text-sm text-muted">No description.</p>
+          <DescriptionLinks v-if="t && !readonly" :task-id="t.id" :text="form.description" :attachments="(liveTask ?? t).attachments ?? []" />
         </div>
 
         <div class="grid grid-cols-2 gap-3">
