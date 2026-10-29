@@ -59,7 +59,7 @@ export async function disablePush(uid) {
 // What a Firebase refusal usually means, in plain words
 export function hintFor(errors) {
   const t = errors.join(' ').toLowerCase()
-  if (/mismatched-credential|sender id/.test(t)) return 'The service account in Vercel (TMS_SERVICE_ACCOUNT) is from a different Firebase project than the one this app uses. Use the key of the same project.'
+  if (/mismatched-credential|sender id|third party webpush/.test(t)) return 'Two keys must belong to the same Firebase project as this app: (1) TMS_SERVICE_ACCOUNT in Vercel, whose "project_id" must match the app\'s project, and (2) VITE_FIREBASE_VAPID_KEY, which must be the Web Push key pair of that same project. After fixing either one, redeploy, then switch Desktop pop-ups off, reload the page and switch it on again to get a fresh push address.'
   if (/has not been used|is disabled|api.*not.*enabled|accessnotconfigured|service_disabled/.test(t)) return 'Turn on the "Firebase Cloud Messaging API" for this project in Google Cloud Console (APIs & Services > Library).'
   if (/permission|403|insufficient|unauthorized|third-party-auth/.test(t)) return 'The service account is not allowed to send messages. In Google Cloud > IAM give it the role "Firebase Cloud Messaging API Admin" (or use the default firebase-adminsdk key).'
   if (/registration-token|not-registered|invalid-argument/.test(t)) return 'This browser\'s saved push address is no longer valid. Switch Desktop pop-ups off, then on again.'
