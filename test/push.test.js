@@ -29,7 +29,7 @@ function setup(failCodes = {}) {
   setServicesForTest({
     db, FieldValue: { serverTimestamp: () => 'TS' },
     tmsAuth: { verifyIdToken: async (t) => { if (!TOKENS[t]) throw new Error('bad'); return { uid: TOKENS[t] } } },
-    messaging: { sendEachForTokens: async (m) => { sent.push(m); return { responses: m.tokens.map((t) => (failCodes[t] ? { success: false, error: { code: failCodes[t] } } : { success: true })) } } },
+    messaging: { sendEachForMulticast: async (m) => { sent.push(m); return { responses: m.tokens.map((t) => (failCodes[t] ? { success: false, error: { code: failCodes[t] } } : { success: true })) } } },
   })
 }
 function call(token, items) {
@@ -84,7 +84,7 @@ test('a device the browser has forgotten is removed; other devices still get it'
   setup({ tokA: 'messaging/registration-token-not-registered' })
   db.store['users/bob/devices/d1'] = { token: 'tokA' }
   db.store['users/bob/devices/d2'] = { token: 'tokB' }
-  const n = await pushToUser({ db, messaging: { sendEachForTokens: async (m) => ({ responses: m.tokens.map((t) => (t === 'tokA' ? { success: false, error: { code: 'messaging/registration-token-not-registered' } } : { success: true })) }) } }, 'bob', note())
+  const n = await pushToUser({ db, messaging: { sendEachForMulticast: async (m) => ({ responses: m.tokens.map((t) => (t === 'tokA' ? { success: false, error: { code: 'messaging/registration-token-not-registered' } } : { success: true })) }) } }, 'bob', note())
   assert.equal(n, 1)
   assert.equal('users/bob/devices/d1' in db.store, false); assert.equal('users/bob/devices/d2' in db.store, true)
 })
@@ -93,7 +93,7 @@ test('nobody turned pop-ups on, or the sender breaks: it returns 0 and never thr
   setup()
   assert.equal(await pushToUser({ db, messaging: {} }, 'bob', note()), 0)
   db.store['users/bob/devices/d1'] = { token: 'tokA' }
-  assert.equal(await pushToUser({ db, messaging: { sendEachForTokens: async () => { throw new Error('down') } } }, 'bob', note()), 0)
+  assert.equal(await pushToUser({ db, messaging: { sendEachForMulticast: async () => { throw new Error('down') } } }, 'bob', note()), 0)
 })
 
 // ----- the service worker (public/sw.js), run in a sandbox with a pretend browser -----

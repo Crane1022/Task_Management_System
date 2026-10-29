@@ -33,7 +33,7 @@ export async function pushToUser({ db, messaging }, uid, n, info = {}) {
     webpush: { headers: { Urgency: 'high', TTL: '86400' } },
   }
   let res
-  try { res = await messaging.sendEachForTokens(message) } catch (e) { console.warn('push failed:', e.code ?? e.message); info.errors.push(`${e.code ?? 'error'}: ${String(e.message ?? '').slice(0, 160)}`); return 0 }
+  try { res = await messaging.sendEachForMulticast(message) } catch (e) { console.warn('push failed:', e.code ?? e.message); info.errors.push(`${e.code ?? 'error'}: ${String(e.message ?? '').slice(0, 160)}`); return 0 }
   let ok = 0
   await Promise.all(res.responses.map(async (r, i) => {
     if (r.success) { ok++; return }
