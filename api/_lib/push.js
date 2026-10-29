@@ -13,7 +13,9 @@ const DEAD = new Set(['messaging/registration-token-not-registered', 'messaging/
 
 // Sends one notification (the stored document `n`) to all of `uid`'s devices. Returns how many devices accepted it.
 // Never throws for a delivery problem: a failed pop-up must not break anything else.
-export async function pushToUser({ db, messaging }, uid, n) {
+// `info.errors` (optional) collects what Firebase said when it refused, so a test can show the reason.
+export async function pushToUser({ db, messaging }, uid, n, info = {}) {
+  info.errors ??= []
   let docs
   try { docs = (await db.collection('users').doc(uid).collection('devices').get()).docs.filter((d) => typeof d.data().token === 'string') }
   catch (e) { console.warn('push: could not read devices:', e.message); return 0 }
@@ -31,10 +33,11 @@ export async function pushToUser({ db, messaging }, uid, n) {
     webpush: { headers: { Urgency: 'high', TTL: '86400' } },
   }
   let res
-  try { res = await messaging.sendEachForTokens(message) } catch (e) { console.warn('push failed:', e.code ?? e.message); return 0 }
+  try { res = await messaging.sendEachForTokens(message) } catch (e) { console.warn('push failed:', e.code ?? e.message); info.errors.push(`${e.code ?? 'error'}: ${String(e.message ?? '').slice(0, 160)}`); return 0 }
   let ok = 0
   await Promise.all(res.responses.map(async (r, i) => {
     if (r.success) { ok++; return }
+    info.errors.push(`${r.error?.code ?? 'error'}: ${String(r.error?.message ?? '').slice(0, 160)}`)
     if (DEAD.has(r.error?.code)) await docs[i].ref.delete().catch(() => {}) // the browser was uninstalled/reset: forget it
   }))
   return ok

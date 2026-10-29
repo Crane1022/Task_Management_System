@@ -22,8 +22,8 @@ self.addEventListener('push', (event) => {
       body: body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      tag: tag || undefined, // the same task/chat replaces its older pop-up instead of piling up
-      renotify: !!tag,
+      tag: test ? undefined : tag || undefined, // the same task/chat replaces its older pop-up instead of piling up (a test is always a new pop-up)
+      renotify: !test && !!tag,
       data: { url: url || '/' },
     })
   })())

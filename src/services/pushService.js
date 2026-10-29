@@ -56,6 +56,16 @@ export async function disablePush(uid) {
   await deleteToken(m).catch(() => {})
 }
 
+// What a Firebase refusal usually means, in plain words
+export function hintFor(errors) {
+  const t = errors.join(' ').toLowerCase()
+  if (/mismatched-credential|sender id/.test(t)) return 'The service account in Vercel (TMS_SERVICE_ACCOUNT) is from a different Firebase project than the one this app uses. Use the key of the same project.'
+  if (/has not been used|is disabled|api.*not.*enabled|accessnotconfigured|service_disabled/.test(t)) return 'Turn on the "Firebase Cloud Messaging API" for this project in Google Cloud Console (APIs & Services > Library).'
+  if (/permission|403|insufficient|unauthorized|third-party-auth/.test(t)) return 'The service account is not allowed to send messages. In Google Cloud > IAM give it the role "Firebase Cloud Messaging API Admin" (or use the default firebase-adminsdk key).'
+  if (/registration-token|not-registered|invalid-argument/.test(t)) return 'This browser\'s saved push address is no longer valid. Switch Desktop pop-ups off, then on again.'
+  return ''
+}
+
 // ----- "Send test pop-up": checks each link of the chain and says in plain words where it breaks -----
 // returns [{ ok, text }]. `getIdToken` gives the signed-in person's token for the server call.
 export async function runPushTest(uid, getIdToken) {
@@ -67,7 +77,7 @@ export async function runPushTest(uid, getIdToken) {
   let reg
   try { reg = await registration(); add(!!reg.active, reg.active ? 'The pop-up helper (sw.js) is running.' : 'The pop-up helper (sw.js) is not active yet. Reload the page once.') } catch (e) { add(false, `The pop-up helper could not start: ${e.message}`); return out }
   // 1. straight from this page: if this shows nothing, it is Windows/browser settings (Focus Assist, notifications blocked for the browser)
-  try { await reg.showNotification('Test 1 of 2: from this computer', { body: 'If you can see this pop-up, Windows and the browser are fine.', icon: '/icons/icon-192.png', tag: 'wb-test-local' }); add(true, 'Test 1 sent. Look at the corner of your screen. If nothing appears, check Windows Settings > System > Notifications (allow Chrome/Edge) and turn off Focus Assist / Do Not Disturb.') }
+  try { await reg.showNotification('Test 1 of 2: from this computer', { body: 'If you can see this pop-up, Windows and the browser are fine.', icon: '/icons/icon-192.png', tag: `wb-test-${Date.now()}` }); add(true, 'Test 1 sent. Look at the corner of your screen. If nothing appears, check Windows Settings > System > Notifications (allow Chrome/Edge) and turn off Focus Assist / Do Not Disturb.') }
   catch (e) { add(false, `The browser refused to show a pop-up: ${e.message}`); return out }
   // 2. through the server and Firebase: the same road a real notification takes
   try {
@@ -75,7 +85,7 @@ export async function runPushTest(uid, getIdToken) {
     const body = await r.json().catch(() => ({}))
     if (!r.ok) add(false, r.status === 404 ? 'The server function /api/send-push was not found. Deploy the api folder (and check the site and api are on the same address).' : `The server answered ${r.status}${body.error ? `: ${body.error}` : ''}.`)
     else if (!body.devices) add(false, 'The server has no saved device for you. Switch Desktop pop-ups off and on again (and check firestore.rules is published).')
-    else if (!body.sent) add(false, 'The server tried but Firebase did not accept it. Check that the Firebase Cloud Messaging API is enabled, and the service account in Vercel is for this Firebase project.')
+    else if (!body.sent) add(false, `The server tried but Firebase did not accept it. Firebase said: ${(body.errors ?? []).join(' | ') || '(no reason given: see the Vercel function logs)'}. ${hintFor(body.errors ?? [])}`)
     else add(true, `Test 2 sent through the server to ${body.sent} device(s). A second pop-up should appear within a few seconds.`)
   } catch (e) { add(false, `Could not reach the server: ${e.message}`) }
   return out

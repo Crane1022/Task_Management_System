@@ -149,11 +149,11 @@ test('sw: clicking focuses the app if it is already open and goes to the page', 
 
 test('send-push {test:true}: sends a test pop-up to the caller\'s own devices and says how many', async () => {
   setup()
-  assert.deepEqual((await call2('tms-ana', { test: true })).body, { ok: true, devices: 0, sent: 0 }, 'no device saved')
+  assert.deepEqual((await call2('tms-ana', { test: true })).body, { ok: true, devices: 0, sent: 0, errors: [] }, 'no device saved')
   db.store['users/ana/devices/d1'] = { token: 'mine' }
   db.store['users/bob/devices/d1'] = { token: 'notmine' }
   const r = await call2('tms-ana', { test: true })
-  assert.deepEqual(r.body, { ok: true, devices: 1, sent: 1 })
+  assert.deepEqual(r.body, { ok: true, devices: 1, sent: 1, errors: [] })
   assert.deepEqual(sent[0].tokens, ['mine'])
   assert.equal(sent[0].data.test, '1')
 })
@@ -168,4 +168,19 @@ test('sw: a test pop-up shows even while the app is open in front', async () => 
   const s = sandbox({ visible: true })
   await s.run('push', pushEvent({ title: 'Test pop-up', body: 'x', test: '1' }))
   assert.equal(s.shown.length, 1)
+})
+
+test('send-push {test:true}: when Firebase refuses, the reason is returned', async () => {
+  setup({ mine: 'messaging/mismatched-credential' })
+  db.store['users/ana/devices/d1'] = { token: 'mine' }
+  const r = await call2('tms-ana', { test: true })
+  assert.equal(r.body.sent, 0); assert.equal(r.body.devices, 1)
+  assert.match(r.body.errors[0], /mismatched-credential/)
+})
+
+test('sw: a test pop-up has no tag, so each test is a new pop-up; a real one with a tag replaces the old one and alerts again', async () => {
+  const a = sandbox(); await a.run('push', pushEvent({ title: 'T', test: '1', tag: 'task-t1' }))
+  assert.equal(a.shown[0][1].tag, undefined); assert.equal(a.shown[0][1].renotify, false)
+  const b = sandbox(); await b.run('push', pushEvent({ title: 'T', tag: 'task-t1' }))
+  assert.equal(b.shown[0][1].tag, 'task-t1'); assert.equal(b.shown[0][1].renotify, true)
 })
