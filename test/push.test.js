@@ -146,3 +146,26 @@ test('sw: clicking focuses the app if it is already open and goes to the page', 
   await s.run('notificationclick', { notification: { close() {}, data: { url: '/workspaces/w1/chat' } } })
   assert.equal(s.log.focused, 1); assert.deepEqual(s.log.navigated, ['https://tasks.test/workspaces/w1/chat']); assert.deepEqual(s.opened, [])
 })
+
+test('send-push {test:true}: sends a test pop-up to the caller\'s own devices and says how many', async () => {
+  setup()
+  assert.deepEqual((await call2('tms-ana', { test: true })).body, { ok: true, devices: 0, sent: 0 }, 'no device saved')
+  db.store['users/ana/devices/d1'] = { token: 'mine' }
+  db.store['users/bob/devices/d1'] = { token: 'notmine' }
+  const r = await call2('tms-ana', { test: true })
+  assert.deepEqual(r.body, { ok: true, devices: 1, sent: 1 })
+  assert.deepEqual(sent[0].tokens, ['mine'])
+  assert.equal(sent[0].data.test, '1')
+})
+function call2(token, body) {
+  return new Promise((resolve) => {
+    const res = { code: 200, setHeader() {}, status(c) { this.code = c; return this }, json(b) { resolve({ status: this.code, body: b }) }, end() { resolve({ status: this.code }) } }
+    handler({ method: 'POST', headers: { host: 'tasks.test', origin: 'https://tasks.test', authorization: `Bearer ${token}` }, body }, res)
+  })
+}
+
+test('sw: a test pop-up shows even while the app is open in front', async () => {
+  const s = sandbox({ visible: true })
+  await s.run('push', pushEvent({ title: 'Test pop-up', body: 'x', test: '1' }))
+  assert.equal(s.shown.length, 1)
+})

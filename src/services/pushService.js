@@ -55,3 +55,28 @@ export async function disablePush(uid) {
   if (token) await deleteDoc(doc(db, 'users', uid, 'devices', await deviceId(token))).catch(() => {})
   await deleteToken(m).catch(() => {})
 }
+
+// ----- "Send test pop-up": checks each link of the chain and says in plain words where it breaks -----
+// returns [{ ok, text }]. `getIdToken` gives the signed-in person's token for the server call.
+export async function runPushTest(uid, getIdToken) {
+  const out = []
+  const add = (ok, text) => { out.push({ ok, text }); return ok }
+  if (!pushPossible()) return [{ ok: false, text: 'This browser cannot show desktop pop-ups.' }]
+  if (!add(!!VAPID_KEY, VAPID_KEY ? 'The app has its push key.' : 'The app was built without VITE_FIREBASE_VAPID_KEY. Add it in Vercel and redeploy.')) return out
+  if (!add(Notification.permission === 'granted', Notification.permission === 'granted' ? 'The browser allows notifications for this site.' : 'Notifications are not allowed for this site yet. Switch Desktop pop-ups on and press Allow.')) return out
+  let reg
+  try { reg = await registration(); add(!!reg.active, reg.active ? 'The pop-up helper (sw.js) is running.' : 'The pop-up helper (sw.js) is not active yet. Reload the page once.') } catch (e) { add(false, `The pop-up helper could not start: ${e.message}`); return out }
+  // 1. straight from this page: if this shows nothing, it is Windows/browser settings (Focus Assist, notifications blocked for the browser)
+  try { await reg.showNotification('Test 1 of 2: from this computer', { body: 'If you can see this pop-up, Windows and the browser are fine.', icon: '/icons/icon-192.png', tag: 'wb-test-local' }); add(true, 'Test 1 sent. Look at the corner of your screen. If nothing appears, check Windows Settings > System > Notifications (allow Chrome/Edge) and turn off Focus Assist / Do Not Disturb.') }
+  catch (e) { add(false, `The browser refused to show a pop-up: ${e.message}`); return out }
+  // 2. through the server and Firebase: the same road a real notification takes
+  try {
+    const r = await fetch('/api/send-push', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getIdToken()}` }, body: JSON.stringify({ test: true }) })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) add(false, r.status === 404 ? 'The server function /api/send-push was not found. Deploy the api folder (and check the site and api are on the same address).' : `The server answered ${r.status}${body.error ? `: ${body.error}` : ''}.`)
+    else if (!body.devices) add(false, 'The server has no saved device for you. Switch Desktop pop-ups off and on again (and check firestore.rules is published).')
+    else if (!body.sent) add(false, 'The server tried but Firebase did not accept it. Check that the Firebase Cloud Messaging API is enabled, and the service account in Vercel is for this Firebase project.')
+    else add(true, `Test 2 sent through the server to ${body.sent} device(s). A second pop-up should appear within a few seconds.`)
+  } catch (e) { add(false, `Could not reach the server: ${e.message}`) }
+  return out
+}

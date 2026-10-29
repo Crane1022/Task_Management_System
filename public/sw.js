@@ -8,16 +8,16 @@ function readPayload(event) {
   try {
     const p = event.data ? event.data.json() : {}
     const d = p.data || p.notification || p
-    return { title: d.title, body: d.body, url: d.url, tag: d.tag }
+    return { title: d.title, body: d.body, url: d.url, tag: d.tag, test: d.test === '1' }
   } catch { return {} }
 }
 
 self.addEventListener('push', (event) => {
-  const { title, body, url, tag } = readPayload(event)
+  const { title, body, url, tag, test } = readPayload(event)
   event.waitUntil((async () => {
     // If the app is open and in front, the bell already shows it: no pop-up on top of it
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    if (wins.some((c) => c.visibilityState === 'visible' && c.focused)) return
+    if (!test && wins.some((c) => c.visibilityState === 'visible' && c.focused)) return // (a test pop-up always shows)
     await self.registration.showNotification(title || 'Widebed Tasks', {
       body: body || '',
       icon: '/icons/icon-192.png',

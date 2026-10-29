@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/firebase/sdk', () => ({}))
 vi.mock('@/firebase/config', () => ({ db: {}, app: {} }))
-const h = vi.hoisted(() => ({ on: false, possible: true, perm: 'default', enablePush: vi.fn(async () => {}), disablePush: vi.fn(async () => {}) }))
+const h = vi.hoisted(() => ({ on: false, possible: true, perm: 'default', enablePush: vi.fn(async () => {}), disablePush: vi.fn(async () => {}), runPushTest: vi.fn(async () => [{ ok: true, text: 'Fine.' }, { ok: false, text: 'The server function /api/send-push was not found.' }]) }))
 vi.mock('@/services/pushService', () => ({
-  pushPossible: () => h.possible, pushPermission: () => h.perm, pushIsOn: async () => h.on, enablePush: h.enablePush, disablePush: h.disablePush,
+  pushPossible: () => h.possible, pushPermission: () => h.perm, pushIsOn: async () => h.on, enablePush: h.enablePush, disablePush: h.disablePush, runPushTest: h.runPushTest,
 }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { uid: 'me' } }) }))
 import { mount, flushPromises } from '@vue/test-utils'
@@ -34,6 +34,12 @@ describe('desktop pop-ups switch', () => {
     expect(w.text()).toContain('Blocked in this browser')
     await w.get('[role=switch]').trigger('click'); await flushPromises()
     expect(w.get('[role=switch]').attributes('aria-checked')).toBe('false')
+  })
+  it('the test button lists each step and marks the one that failed', async () => {
+    const w = mount(PushToggle); await flushPromises()
+    await w.findAll('button').find((b) => b.text() === 'Send test pop-up').trigger('click'); await flushPromises()
+    const lines = w.findAll('li').map((l) => l.text())
+    expect(lines[0]).toContain('✓'); expect(lines[1]).toContain('✗'); expect(lines[1]).toContain('/api/send-push')
   })
   it('is hidden in a browser that cannot do it', async () => {
     h.possible = false

@@ -16,6 +16,12 @@ export default handle(async (req) => {
   const services = getServices()
   let me
   try { me = (await services.tmsAuth.verifyIdToken(idToken)).uid } catch { throw new HttpError(401, 'Not signed in') }
+  // { test: true }: send a test pop-up to the caller's OWN devices, to find out where a problem is
+  if (req.body?.test === true) {
+    const devices = (await services.db.collection('users').doc(me).collection('devices').get()).docs.length
+    const sent = devices ? await pushToUser(services, me, { type: 'test', title: 'Test pop-up', body: 'If you can see this, desktop pop-ups work.', test: true }) : 0
+    return { ok: true, devices, sent }
+  }
   const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, MAX_ITEMS) : []
   let sent = 0
   for (const it of items) {

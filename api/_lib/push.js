@@ -25,6 +25,7 @@ export async function pushToUser({ db, messaging }, uid, n) {
       title: String(n.title ?? 'Widebed Tasks').slice(0, 150),
       body: String(n.body ?? '').slice(0, 200),
       url: linkFor(n),
+      ...(n.test ? { test: '1' } : {}),
       tag: n.taskId ? `task-${n.taskId}` : n.workspaceId ? `ws-${n.workspaceId}` : String(n.type ?? 'n'),
     },
     webpush: { headers: { Urgency: 'high', TTL: '86400' } },
