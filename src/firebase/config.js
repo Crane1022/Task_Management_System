@@ -3,7 +3,7 @@ import { getAuth } from '@/firebase/sdk'
 import { getFirestore } from '@/firebase/sdk'
 
 // All values come from environment variables (see .env.example). Nothing is hardcoded.
-const app = initializeApp({
+export const app = initializeApp({
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,

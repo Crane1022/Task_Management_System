@@ -59,3 +59,15 @@ You never get a notification for your own action. Clicking one opens the task (`
 3. In Vercel add the environment variable `CRON_SECRET` (any long random string; Vercel Cron sends it as a Bearer token). Optional: `REMINDER_UTC_OFFSET_HOURS` (default 8).
 
 Not built: e-mail. It needs a mail provider and its key. Notifications are best effort: if one cannot be saved, the task action still succeeds.
+
+## Desktop pop-ups (works when the app window is closed)
+
+Each notification can also appear as a pop-up on the computer (Windows: bottom-right; Mac: top-right), even when the installed app is closed. It uses Web Push through Firebase Cloud Messaging (free; this is not Firebase Storage). `public/sw.js` shows the pop-up and opens the right page when it is clicked; `api/send-push.js` sends it.
+
+**To switch it on** (nothing here is done for you):
+1. Firebase Console > Project settings > Cloud Messaging > **Web Push certificates** > *Generate key pair*. Copy the PUBLIC key.
+2. In Vercel add the environment variable `VITE_FIREBASE_VAPID_KEY` with that key (and the same in `.env.local` to try it locally), then redeploy so the app is rebuilt with it.
+3. Publish `firestore.rules` (new `users/{uid}/devices`) and deploy `api/` (new `send-push.js`; `TMS_SERVICE_ACCOUNT` is already set).
+4. On each computer: open the app, click the bell, switch on **Desktop pop-ups**, press Allow.
+
+Notes: no pop-up shows on top of the app while it is open in front (the bell already shows it). A pop-up for the same task replaces the older one. Chrome/Edge on Windows normally still receive pop-ups with the window closed because the browser keeps running in the background; if the browser is fully quit, they arrive when it starts. Do Not Disturb / Focus Assist hides the pop-up but it stays in the notification list. The first time, `manifest.webmanifest` and the icons in `public/icons` make the site installable; replace the icons with your logo if you like.

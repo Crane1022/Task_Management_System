@@ -36,13 +36,26 @@ export const useNotificationStore = defineStore('notifications', () => {
   const remove = (n) => svc.removeMany(owner, [n.id]).catch(() => {})
 
   // ----- sending: never blocks or breaks the action that caused it -----
+  // Asks the server to show a desktop pop-up on the receivers' computers (if they turned it on). Best effort, silent on any problem.
+  async function popUp(saved) {
+    try {
+      if (!saved?.length || !auth.user?.getIdToken) return
+      await fetch('/api/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.user.getIdToken()}` },
+        body: JSON.stringify({ items: saved }),
+      })
+    } catch { /* the bell still has it */ }
+  }
   const me = () => auth.profile
   async function send(type, recipients, extra) {
     const by = me()
     const ids = [...new Set(recipients)].filter((id) => id && id !== by?.id)
     if (!by || !ids.length) return
-    try { await svc.sendNotifications(ids.map((uid) => ({ uid, data: buildNotification(type, by, extra) }))) }
-    catch (e) { console.warn('Notification not sent:', e.code ?? e.message) }
+    try {
+      const saved = await svc.sendNotifications(ids.map((uid) => ({ uid, data: buildNotification(type, by, extra) })))
+      popUp(saved)
+    } catch (e) { console.warn('Notification not sent:', e.code ?? e.message) }
   }
 
   const taskAssigned = (task, uids) => send('assigned', uids, { task })

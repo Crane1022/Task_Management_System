@@ -8,6 +8,7 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { getMessaging } from 'firebase-admin/messaging'
 
 export const PMS_PROJECT = process.env.PMS_PROJECT_ID || 'widebed-pmsdashboard'
 export const PMS_ROLES = ['director', 'finance', 'it', 'hr', 'operations', 'procurement', 'marketing']
@@ -28,7 +29,7 @@ export function getServices() {
   const tms = getApps().find((a) => a.name === 'tms')
     || initializeApp({ credential: cert(JSON.parse(process.env.TMS_SERVICE_ACCOUNT)) }, 'tms')
   services = {
-    pmsAuth: getAuth(pms), tmsAuth: getAuth(tms), db: getFirestore(tms), FieldValue, Timestamp,
+    pmsAuth: getAuth(pms), tmsAuth: getAuth(tms), db: getFirestore(tms), messaging: getMessaging(tms), FieldValue, Timestamp,
     fetch: (...a) => fetch(...a),
   }
   return services

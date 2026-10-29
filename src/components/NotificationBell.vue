@@ -5,6 +5,7 @@ import { Bell, UserPlus, MessageSquare, AtSign, ArrowRightLeft, CheckCircle2, Us
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import { formatDateTime } from '@/utils/dates'
+import PushToggle from '@/components/PushToggle.vue'
 
 // The bell in the top bar: unread count, the list, mark as read, and a click that opens the task or workspace.
 const auth = useAuthStore()
@@ -60,6 +61,7 @@ async function go(n) {
             <button class="absolute right-2 top-2 rounded p-1 text-muted opacity-0 hover:text-red-600 focus:opacity-100 group-hover:opacity-100" aria-label="Remove this notification" @click.stop="store.remove(n)"><X class="h-3.5 w-3.5" /></button>
           </li>
         </ul>
+        <PushToggle />
       </div>
     </template>
   </div>

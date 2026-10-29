@@ -349,6 +349,16 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid == uid;
     }
 
+    // ---------- my devices for desktop pop-ups: each holds one browser's push address, private to its owner ----------
+    match /users/{uid}/devices/{did} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['token', 'agent', 'createdAt', 'updatedAt'])
+        && request.resource.data.token is string && request.resource.data.token.size() > 20 && request.resource.data.token.size() <= 600
+        && request.resource.data.get('agent', '') is string && request.resource.data.get('agent', '').size() <= 200
+        && request.resource.data.updatedAt == request.time;
+    }
+
     // ---------- my chat stickers (links to pictures): private to their owner ----------
     match /users/{uid}/stickers/{sid} {
       allow read, delete: if signedIn() && request.auth.uid == uid;

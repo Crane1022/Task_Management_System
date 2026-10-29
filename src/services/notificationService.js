@@ -13,11 +13,17 @@ export function subscribeNotifications(uid, onData, onError) {
 }
 
 // items = [{ uid, data }]. One write for all. Best effort: the caller decides what to do with a failure.
+// Returns [{ uid, id }] of what was saved (the desktop pop-up function needs them).
 export async function sendNotifications(items) {
-  if (!items.length) return
+  if (!items.length) return []
   const batch = writeBatch(db)
-  for (const { uid, data } of items) batch.set(doc(inbox(uid)), { ...data, createdAt: serverTimestamp() })
+  const saved = items.map(({ uid, data }) => {
+    const ref = doc(inbox(uid))
+    batch.set(ref, { ...data, createdAt: serverTimestamp() })
+    return { uid, id: ref.id }
+  })
   await batch.commit()
+  return saved
 }
 
 export const markRead = (uid, id) => updateDoc(doc(db, 'users', uid, 'notifications', id), { read: true })

@@ -3,6 +3,7 @@
 // Safe to run again: each notification has a fixed id, so nobody is told twice about the same task.
 import { timingSafeEqual } from 'node:crypto'
 import { getServices, HttpError } from './_lib/pms.js'
+import { pushToUser } from './_lib/push.js'
 import { planReminders, startOfDay, DAY } from './_lib/deadlines.js'
 
 const same = (a, b) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b))
@@ -25,16 +26,19 @@ async function run(req) {
   })
   const plan = planReminders(tasks, now, offset)
 
+  const services = getServices()
   let created = 0
+  let pushed = 0
   for (const p of plan) {
     try {
-      await db.collection('users').doc(p.uid).collection('notifications').doc(p.id).create({ ...p.data, createdAt: getServices().FieldValue.serverTimestamp() })
+      await db.collection('users').doc(p.uid).collection('notifications').doc(p.id).create({ ...p.data, createdAt: services.FieldValue.serverTimestamp() })
       created++
+      pushed += await pushToUser(services, p.uid, p.data) // desktop pop-up too, only the first time
     } catch (e) {
       if (e.code !== 6 && !/already exists/i.test(e.message ?? '')) throw e // 6 = ALREADY_EXISTS: told before, fine
     }
   }
-  return { ok: true, checked: tasks.length, created }
+  return { ok: true, checked: tasks.length, created, pushed }
 }
 
 // Not wrapped in handle(): Vercel Cron calls with GET and no browser Origin, and only the secret lets a caller in.
