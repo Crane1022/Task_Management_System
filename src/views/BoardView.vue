@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import { useRoute } from 'vue-router'
 import { Plus, SearchX, Archive, Star, Settings2, Eye, ShieldOff } from 'lucide-vue-next'
@@ -54,9 +54,11 @@ onUnmounted(() => board.stop())
 // Local copy of the visible columns so dragging feels instant; Firestore keeps the real order.
 const colList = ref([])
 watch(() => board.activeColumns, (v) => (colList.value = [...v]), { immediate: true })
-function onColumnDrop(evt) {
-  const ids = [...evt.to.children].map((el) => el.dataset.colId).filter(Boolean)
-  board.moveColumn(ids)
+// The drag library has already put the new order into colList (v-model). Read THAT: the page itself is only
+// redrawn a moment later, so reading the page right after a drop still shows the OLD order and nothing would be saved.
+async function onColumnDrop() {
+  await nextTick()
+  board.moveColumn(colList.value.map((c) => c.id))
 }
 
 async function addColumn() {
