@@ -4,7 +4,7 @@ import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
 import { useNotificationStore } from './notifications'
 import * as svc from '@/services/workspaceService'
-import { leavesAnAdmin, workspaceRoleFor, effectiveBoardRole } from '@/utils/permissions'
+import { leavesAnAdmin, workspaceRoleFor, effectiveBoardRole, mayCreateWorkspace, mayTurnOffPrivate } from '@/utils/permissions'
 
 // The workspaces this person belongs to (a Director sees all), the boards in them, and their starred boards.
 export const useWorkspaceStore = defineStore('workspace', () => {
@@ -20,7 +20,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   let unsubs = []
   const boardUnsubs = new Map()
 
-  const canCreateWorkspace = computed(() => auth.isAdmin || auth.isManager)
+  // everyone can create a Super Private workspace; only Directors and Department Managers can create a normal one
+  const canCreateWorkspace = computed(() => !!auth.user)
+  const canCreateNormalWorkspace = computed(() => auth.isAdmin || auth.isManager)
   const allBoards = computed(() => Object.values(boards.value).flat())
   const workspaceById = (id) => workspaces.value.find((w) => w.id === id)
   const boardById = (id) => allBoards.value.find((b) => b.id === id)
@@ -85,6 +87,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   const addWorkspace = (data) => run(async () => {
+    if (!mayCreateWorkspace(auth.profile?.role, data.superPrivate)) throw new Error('Only a Director or Department Manager can create a normal workspace. You can create a Super Private one.')
     const id = await svc.createWorkspace(auth.user.uid, data)
     ui.toast('Workspace created')
     return id
@@ -92,6 +95,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const saveWorkspace = (id, changes, message = 'Workspace saved') => run(async () => { await svc.updateWorkspace(id, changes); ui.toast(message); return true }, 'Could not save workspace')
 
   const setSuperPrivate = (ws, on) => run(async () => {
+    if (on !== true && !mayTurnOffPrivate(auth.profile?.role)) throw new Error('Only a Director or Department Manager can turn a workspace back to normal.')
     await svc.updateWorkspace(ws.id, { superPrivate: on === true })
     ui.toast(on ? 'This workspace is now Super Private' : 'This workspace is no longer Super Private')
     return true
@@ -134,7 +138,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const toggleStar = (bid) => run(() => svc.setStar(auth.user.uid, bid, !isStarred(bid)), 'Could not update the star')
 
   return {
-    workspaces, boards, stars, loading, error, canCreateWorkspace, allBoards,
+    workspaces, boards, stars, loading, error, canCreateWorkspace, canCreateNormalWorkspace, allBoards,
     workspaceById, boardById, isStarred, roleIn, roleOnBoard, canManageMembers, isOwner,
     backfillOldWorkspaces, start, stop, addWorkspace, saveWorkspace, setSuperPrivate, addMembers, changeRole, kick,
     addBoard, saveBoard, setBoardRole, removeBoard, adoptMain, toggleStar,

@@ -196,9 +196,10 @@ async function adopt() {
 
           <div v-if="store.isOwner(ws) || (ws.superPrivate && canManage)" class="mt-4 rounded-2xl border border-line bg-surface p-4">
             <label class="flex cursor-pointer items-start gap-2.5">
-              <input type="checkbox" class="mt-0.5 accent-[var(--accent)]" :checked="!!ws.superPrivate" @change="askPrivacy($event)" />
+              <input type="checkbox" class="mt-0.5 accent-[var(--accent)]" :checked="!!ws.superPrivate" :disabled="!!ws.superPrivate && !auth.canManage" @change="askPrivacy($event)" />
               <span><span class="flex items-center gap-1 text-sm font-extrabold"><Lock class="h-3.5 w-3.5" />Super Private Workspace</span>
-                <span class="mt-0.5 block text-sm text-muted">Only the people added can open this workspace, its boards, tasks, comments and attachments. Directors, Department Managers and admins get no access from their job. Every member has the owner's powers inside it.</span></span>
+                <span class="mt-0.5 block text-sm text-muted">Only the people added can open this workspace, its boards, tasks, comments and attachments. Directors, Department Managers and admins get no access from their job. Every member has the owner's powers inside it.</span>
+                <span v-if="ws.superPrivate && !auth.canManage" class="mt-1 block text-xs font-semibold text-accent">Only a Director or Department Manager can turn this back into a normal workspace.</span></span>
             </label>
           </div>
           

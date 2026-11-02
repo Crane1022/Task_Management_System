@@ -7,7 +7,9 @@ import { Lock } from 'lucide-vue-next'
 
 const emit = defineEmits(['close', 'created'])
 const store = useWorkspaceStore()
-const form = ref({ name: '', description: '', icon: '', color: 'sage', superPrivate: false })
+// Directors and Department Managers choose; everyone else can only make a Super Private workspace
+const mustBePrivate = !store.canCreateNormalWorkspace
+const form = ref({ name: '', description: '', icon: '', color: 'sage', superPrivate: mustBePrivate })
 const busy = ref(false)
 const error = ref('')
 
@@ -49,10 +51,11 @@ async function submit() {
           </div>
         </div>
         <label class="flex cursor-pointer items-start gap-2.5 rounded-xl border p-3" :class="form.superPrivate ? 'border-accent bg-accent-soft' : 'border-line'">
-          <input v-model="form.superPrivate" type="checkbox" class="mt-0.5 accent-[var(--accent)]" />
+          <input v-model="form.superPrivate" type="checkbox" class="mt-0.5 accent-[var(--accent)]" :disabled="mustBePrivate" />
           <span>
             <span class="flex items-center gap-1 text-sm font-bold"><Lock class="h-3.5 w-3.5" />Super Private Workspace</span>
             <span class="mt-0.5 block text-xs text-muted">Only you (the owner) and the people you add can open it, its boards and its tasks. Directors, Department Managers and admins get no access from their job. Everyone you add gets the same powers as you inside it, including adding members.</span>
+            <span v-if="mustBePrivate" class="mt-1 block text-xs font-semibold text-accent">Your role can create a Super Private workspace. Normal workspaces are created by a Director or Department Manager.</span>
           </span>
         </label>
       </div>

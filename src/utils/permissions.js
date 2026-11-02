@@ -39,3 +39,9 @@ export function leavesAnAdmin(members, uid, newRole) {
   if (newRole) next[uid] = newRole; else delete next[uid]
   return Object.values(next).includes('admin')
 }
+
+// Who may create a workspace. Directors and Department Managers can make a normal one;
+// every other role can only make a Super Private one (their own closed room), and cannot switch it back to normal.
+const MAY_MAKE_NORMAL = ['super_admin', 'dept_manager']
+export const mayCreateWorkspace = (role, superPrivate) => MAY_MAKE_NORMAL.includes(role) || superPrivate === true
+export const mayTurnOffPrivate = (role) => MAY_MAKE_NORMAL.includes(role)

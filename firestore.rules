@@ -197,8 +197,8 @@ service cloud.firestore {
       // A Director sees every workspace except Super Private ones they were not added to.
       allow read: if signedIn() && (request.auth.uid in resource.data.memberIds
         || (isAdmin() && !wsIsPrivate(resource.data)));
-      // Directors and Department Managers create workspaces; the creator becomes the OWNER and must be an admin of it
-      allow create: if hasProfile() && (isAdmin() || isManager())
+      // Directors and Department Managers create any workspace; every other role may create only a Super Private one. The creator becomes the OWNER and must be an admin of it
+      allow create: if hasProfile() && (isAdmin() || isManager() || request.resource.data.get('superPrivate', false) == true)
         && request.resource.data.createdBy == request.auth.uid
         && nameOk(request.resource.data)
         && request.resource.data.get('superPrivate', false) is bool
@@ -212,6 +212,8 @@ service cloud.firestore {
         && membersOk(request.resource.data) && hasAdmin(request.resource.data)
         // only the owner turns Super Private ON for a normal workspace; once it is Super Private, any of its members may change members or turn it off
         && (wsIsPrivate(request.resource.data) == wsIsPrivate(resource.data) || wsIsPrivate(resource.data) || resource.data.createdBy == request.auth.uid)
+        // turning a Super Private workspace back into a normal one is for Directors and Department Managers only
+        && (wsIsPrivate(request.resource.data) || !wsIsPrivate(resource.data) || isAdmin() || isManager())
         // the one thing members cannot do to each other: the owner always stays an admin member of their own Super Private workspace
         && (!wsIsPrivate(request.resource.data) || request.resource.data.members.get(request.resource.data.createdBy, 'none') == 'admin');
       // Workspaces are archived, not deleted. Only the owner, or a Director for a workspace that is not Super Private, can remove one.

@@ -43,3 +43,18 @@ test('Super Private: every member counts as admin on every board, whatever the b
   assert.equal(effectiveBoardRole({ workspaceRole: workspaceRoleFor(secret, 'm', false), workspacePrivate: true, boardOverride: 'viewer' }), 'admin')
   assert.equal(effectiveBoardRole({ workspaceRole: workspaceRoleFor(normal, 'm', false), boardOverride: 'viewer' }), 'viewer')
 })
+
+import { mayCreateWorkspace, mayTurnOffPrivate } from '../src/utils/permissions.js'
+test('Directors and Department Managers create any workspace; employees only a Super Private one', () => {
+  assert.equal(mayCreateWorkspace('super_admin', false), true)
+  assert.equal(mayCreateWorkspace('dept_manager', false), true)
+  assert.equal(mayCreateWorkspace('employee', false), false)
+  assert.equal(mayCreateWorkspace('employee', true), true)
+  assert.equal(mayCreateWorkspace(undefined, true), true)
+  assert.equal(mayCreateWorkspace('employee', undefined), false)
+})
+test('only Directors and Department Managers can turn a Super Private workspace back to normal', () => {
+  assert.equal(mayTurnOffPrivate('super_admin'), true)
+  assert.equal(mayTurnOffPrivate('dept_manager'), true)
+  assert.equal(mayTurnOffPrivate('employee'), false)
+})
