@@ -113,6 +113,11 @@ export const adoptMainBoard = (uid, wid) => setDoc(doc(db, 'boards', 'main'), {
 export const mainBoardExists = async () => (await getDoc(doc(db, 'boards', 'main'))).exists()
 
 // ---------- starred boards: private to each person ----------
+// my own sidebar arrangement (workspace order and folders): private to me, so it needs no new rule (users/{uid}/settings/* is mine)
+const layoutRef = (uid) => doc(db, 'users', uid, 'settings', 'sidebar')
+export const subscribeLayout = (uid, onData) => onSnapshot(layoutRef(uid), (snap) => onData(snap.exists() ? snap.data() : null), () => onData(null))
+export const saveLayout = (uid, layout) => setDoc(layoutRef(uid), { order: layout.order, folders: layout.folders, updatedAt: serverTimestamp() })
+
 const starsRef = (uid) => doc(db, 'users', uid, 'settings', 'stars')
 export const subscribeStars = (uid, onData) => onSnapshot(starsRef(uid), (snap) => onData(snap.data()?.boardIds ?? []), () => onData([]))
 export const setStar = (uid, bid, on) => setDoc(starsRef(uid), { boardIds: on ? arrayUnion(bid) : arrayRemove(bid) }, { merge: true })

@@ -15,6 +15,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const workspaces = ref([])
   const boards = ref({}) // workspaceId -> boards
   const stars = ref([])
+  const layout = ref(null) // my own sidebar arrangement: workspace order and folders
   const loading = ref(true)
   const error = ref('')
   let unsubs = []
@@ -74,12 +75,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         workspaces.value = list; loading.value = false; syncBoards(list)
       }, (e) => { error.value = e.message; loading.value = false }),
       svc.subscribeStars(auth.user.uid, (ids) => (stars.value = ids)),
+      svc.subscribeLayout(auth.user.uid, (l) => (layout.value = l)),
     ]
   }
   function stop() {
     unsubs.forEach((u) => u()); unsubs = []
     boardUnsubs.forEach((u) => u()); boardUnsubs.clear()
-    workspaces.value = []; boards.value = {}; stars.value = []
+    workspaces.value = []; boards.value = {}; stars.value = []; layout.value = null
   }
 
   async function run(fn, msg) {
@@ -92,6 +94,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ui.toast('Workspace created')
     return id
   }, 'Could not create workspace')
+  const saveLayout = (l) => run(async () => { layout.value = { ...l }; await svc.saveLayout(auth.user.uid, l); return true }, 'Could not save the sidebar order')
   const saveWorkspace = (id, changes, message = 'Workspace saved') => run(async () => { await svc.updateWorkspace(id, changes); ui.toast(message); return true }, 'Could not save workspace')
 
   const setSuperPrivate = (ws, on) => run(async () => {
@@ -138,7 +141,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const toggleStar = (bid) => run(() => svc.setStar(auth.user.uid, bid, !isStarred(bid)), 'Could not update the star')
 
   return {
-    workspaces, boards, stars, loading, error, canCreateWorkspace, canCreateNormalWorkspace, allBoards,
+    workspaces, boards, stars, layout, saveLayout, loading, error, canCreateWorkspace, canCreateNormalWorkspace, allBoards,
     workspaceById, boardById, isStarred, roleIn, roleOnBoard, canManageMembers, isOwner,
     backfillOldWorkspaces, start, stop, addWorkspace, saveWorkspace, setSuperPrivate, addMembers, changeRole, kick,
     addBoard, saveBoard, setBoardRole, removeBoard, adoptMain, toggleStar,

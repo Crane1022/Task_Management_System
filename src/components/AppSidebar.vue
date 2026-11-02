@@ -1,12 +1,13 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound, PawPrint, Lock } from 'lucide-vue-next'
+import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound, PawPrint, FolderPlus } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspaceStore } from '@/stores/workspace'
 import WorkspaceAvatar from '@/components/WorkspaceAvatar.vue'
 import CreateWorkspaceDialog from '@/components/CreateWorkspaceDialog.vue'
+import SidebarWorkspaces from '@/components/SidebarWorkspaces.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { deptName, displayOf } from '@/utils/constants'
 
@@ -17,12 +18,7 @@ const router = useRouter()
 // ----- workspaces: each one expands to Boards, Members and Settings -----
 const wsStore = useWorkspaceStore()
 const myWorkspaces = computed(() => wsStore.workspaces.filter((w) => !w.archived))
-const openIds = ref(JSON.parse(localStorage.getItem('wb-ws-open') || '[]'))
-const isOpen = (id) => openIds.value.includes(id)
-function toggleWs(id) {
-  openIds.value = isOpen(id) ? openIds.value.filter((x) => x !== id) : [...openIds.value, id]
-  localStorage.setItem('wb-ws-open', JSON.stringify(openIds.value))
-}
+const wsList = ref(null)
 const checking = ref(false)
 async function checkOld() {
   checking.value = true
@@ -33,7 +29,7 @@ async function checkOld() {
 const creatingWs = ref(false)
 function wsCreated(id) {
   creatingWs.value = false
-  if (!isOpen(id)) toggleWs(id)
+  wsList.value?.expand(id)
   router.push(`/workspaces/${id}`)
 }
 
@@ -78,24 +74,12 @@ async function signOut() { await auth.logout(); router.push('/login') }
       </router-link>
       <div class="flex items-center justify-between px-3 pb-1 pt-4" :class="ui.collapsed && 'md:hidden'">
         <p class="text-[11px] font-bold uppercase tracking-wide text-muted">Workspaces</p>
-        <button v-if="wsStore.canCreateWorkspace" class="rounded p-0.5 text-muted hover:bg-bg hover:text-accent" title="Create a workspace" aria-label="Create a workspace" @click="creatingWs = true; ui.mobileNav = false"><Plus class="h-4 w-4" /></button>
-      </div>
-      <div v-for="w in myWorkspaces" :key="w.id">
-        <div class="flex items-center">
-          <router-link :to="`/workspaces/${w.id}`" exact-active-class="bg-accent-soft text-accent" class="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted hover:bg-bg" :title="w.name" @click="ui.mobileNav = false">
-            <WorkspaceAvatar :workspace="w" :size="22" />
-            <span class="truncate" :class="ui.collapsed && 'md:hidden'">{{ w.name }}</span>
-            <Lock v-if="w.superPrivate" class="h-3 w-3 shrink-0" :class="ui.collapsed && 'md:hidden'" title="Super Private" aria-label="Super Private" />
-          </router-link>
-          <button class="rounded p-1 text-muted hover:bg-bg" :class="ui.collapsed && 'md:hidden'" :aria-expanded="isOpen(w.id)" :aria-label="`${isOpen(w.id) ? 'Collapse' : 'Expand'} ${w.name}`" @click="toggleWs(w.id)">
-            <component :is="isOpen(w.id) ? ChevronDown : ChevronRight" class="h-4 w-4" />
-          </button>
-        </div>
-        <div v-if="isOpen(w.id)" class="reveal ml-[22px] pt-1 space-y-0.5 border-l border-line pl-2" :class="ui.collapsed && 'md:hidden'">
-          <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${w.id}${s.p}`"
-            exact-active-class="bg-accent-soft text-accent" class="block rounded-md px-2.5 py-1 text-[13px] font-semibold text-muted hover:bg-bg" @click="ui.mobileNav = false">{{ s.l }}</router-link>
+        <div class="flex items-center gap-0.5">
+          <button class="rounded p-0.5 text-muted hover:bg-bg hover:text-accent" title="New folder" aria-label="New folder" @click="wsList?.startNewFolder()"><FolderPlus class="h-4 w-4" /></button>
+          <button v-if="wsStore.canCreateWorkspace" class="rounded p-0.5 text-muted hover:bg-bg hover:text-accent" title="Create a workspace" aria-label="Create a workspace" @click="creatingWs = true; ui.mobileNav = false"><Plus class="h-4 w-4" /></button>
         </div>
       </div>
+      <SidebarWorkspaces ref="wsList" :collapsed="ui.collapsed" @navigate="ui.mobileNav = false" />
       <p v-if="!myWorkspaces.length && !wsStore.loading" class="px-3 py-1 text-xs text-muted" :class="ui.collapsed && 'md:hidden'">{{ wsStore.canCreateWorkspace ? 'No workspaces yet. Press + to create one.' : 'You are not in a workspace yet.' }}</p>
       <div v-if="auth.isAdmin && !wsStore.loading && !myWorkspaces.length" class="mx-3 mb-1 rounded-lg bg-bg p-2 text-xs text-muted" :class="ui.collapsed && 'md:hidden'">
         <p v-if="wsStore.error" class="font-semibold text-red-600" role="alert">Could not load workspaces: {{ wsStore.error }}</p>
