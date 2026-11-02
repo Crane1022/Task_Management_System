@@ -25,20 +25,23 @@ describe('Sidebar workspaces', () => {
     await w.find('button[aria-expanded]').trigger('click')
     expect(label().classes()).toContain('break-words')
     expect(label().classes()).not.toContain('truncate')
-    expect(w.text()).toContain('Boards')
+    expect(w.find('.collapsible').classes()).toContain('open')
+    expect(w.find('.collapsible').attributes('inert')).toBeUndefined()
     await w.find('button[aria-expanded]').trigger('click')
     expect(label().classes()).toContain('truncate')
+    expect(w.find('.collapsible').classes()).not.toContain('open')
+    expect(w.find('.collapsible').attributes('inert')).toBeDefined() // closed links cannot be tabbed to
   })
 
   it('shows saved folders with their workspaces and opens or closes them', async () => {
     store.layout = { order: ['f:x', 'w:c'], folders: { x: { name: 'Ops', wsIds: ['b', 'a'] } } }
     const w = mount(SidebarWorkspaces, { global: { stubs } })
     expect(w.text()).toContain('Ops')
-    const list = w.find('.folder-list')
-    expect(list.text()).toContain('Finance')
-    expect(list.attributes('style') ?? '').not.toContain('display: none')
+    const box = () => w.find('.folder-list').element.closest('.collapsible')
+    expect(w.find('.folder-list').text()).toContain('Finance')
+    expect(box().classList.contains('open')).toBe(true)
     await w.find('button[aria-expanded][title="Ops"]').trigger('click')
-    expect(w.find('.folder-list').attributes('style')).toContain('display: none')
+    expect(box().classList.contains('open')).toBe(false)
   })
 
   it('creates, renames and deletes a folder and saves each change', async () => {

@@ -101,9 +101,13 @@ defineExpose({ startNewFolder, expand })
               <component :is="isOpen(e.ws.id) ? ChevronDown : ChevronRight" class="h-4 w-4" />
             </button>
           </div>
-          <div v-if="isOpen(e.ws.id)" class="reveal ml-[34px] space-y-0.5 border-l border-line pl-2" :class="props.collapsed && 'md:hidden'">
-            <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${e.ws.id}${s.p}`"
-              exact-active-class="bg-accent-soft text-accent" class="block rounded-md px-2.5 py-1 text-[13px] font-semibold text-muted hover:bg-bg" @click="emit('navigate')">{{ s.l }}</router-link>
+          <div class="collapsible" :class="[isOpen(e.ws.id) && 'open', props.collapsed && 'md:hidden']" :inert="isOpen(e.ws.id) ? null : ''">
+            <div class="collapsible-clip">
+              <div class="sub-links ml-[34px] space-y-0.5 border-l border-line pl-2">
+                <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${e.ws.id}${s.p}`"
+                  exact-active-class="bg-accent-soft text-accent" class="block rounded-md px-2.5 py-1 text-[13px] font-semibold text-muted hover:bg-bg" @click="emit('navigate')">{{ s.l }}</router-link>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -124,7 +128,8 @@ defineExpose({ startNewFolder, expand })
               <button class="rounded p-1 text-muted opacity-60 hover:bg-bg hover:text-red-600 focus:opacity-100 group-hover:opacity-100" :class="props.collapsed && 'md:hidden'" :aria-label="`Delete folder ${e.name}`" title="Delete folder (its workspaces stay)" @click="removeFolder(e)"><Trash2 class="h-3.5 w-3.5" /></button>
             </template>
           </div>
-          <VueDraggable v-show="folderOpen(e.id)" v-model="e.items" class="folder-list ml-[18px] space-y-0.5 border-l border-line pl-1.5" :animation="150" handle=".grip" :group="folderGroup" ghost-class="opacity-40" :class="props.collapsed && 'md:hidden'" @start="onStart" @end="onEnd">
+          <div class="collapsible" :class="[folderOpen(e.id) && 'open', props.collapsed && 'md:hidden']" :inert="folderOpen(e.id) ? null : ''"><div class="collapsible-clip">
+          <VueDraggable v-model="e.items" class="folder-list sub-links ml-[18px] space-y-0.5 border-l border-line pl-1.5" :animation="150" handle=".grip" :group="folderGroup" ghost-class="opacity-40" @start="onStart" @end="onEnd">
             <div v-for="w in e.items" :key="w.id" class="ws-row" data-kind="ws">
               <div class="flex items-start">
                 <span class="grip mt-2 cursor-grab touch-none text-muted/60 hover:text-ink" title="Drag to move" aria-hidden="true"><GripVertical class="h-3.5 w-3.5" /></span>
@@ -137,12 +142,17 @@ defineExpose({ startNewFolder, expand })
                   <component :is="isOpen(w.id) ? ChevronDown : ChevronRight" class="h-4 w-4" />
                 </button>
               </div>
-              <div v-if="isOpen(w.id)" class="reveal ml-[34px] space-y-0.5 border-l border-line pl-2">
-                <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${w.id}${s.p}`"
-                  exact-active-class="bg-accent-soft text-accent" class="block rounded-md px-2.5 py-1 text-[13px] font-semibold text-muted hover:bg-bg" @click="emit('navigate')">{{ s.l }}</router-link>
+              <div class="collapsible" :class="isOpen(w.id) && 'open'" :inert="isOpen(w.id) ? null : ''">
+                <div class="collapsible-clip">
+                  <div class="sub-links ml-[34px] space-y-0.5 border-l border-line pl-2">
+                    <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${w.id}${s.p}`"
+                      exact-active-class="bg-accent-soft text-accent" class="block rounded-md px-2.5 py-1 text-[13px] font-semibold text-muted hover:bg-bg" @click="emit('navigate')">{{ s.l }}</router-link>
+                  </div>
+                </div>
               </div>
             </div>
           </VueDraggable>
+          </div></div>
         </template>
       </div>
     </VueDraggable>
@@ -151,5 +161,11 @@ defineExpose({ startNewFolder, expand })
 
 <style scoped>
 .folder-list { min-height: 26px; }
+/* open and close smoothly: the row grows from 0 to its own height (no measuring needed), and a small gap opens under the name */
+.collapsible { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 0.26s ease, opacity 0.2s ease, visibility 0s linear 0.26s; }
+.collapsible.open { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition: grid-template-rows 0.26s ease, opacity 0.2s ease 0.04s, visibility 0s; }
+.collapsible-clip { min-height: 0; overflow: hidden; }
+.sub-links { margin-top: 4px; margin-bottom: 2px; }
+@media (prefers-reduced-motion: reduce) { .collapsible, .collapsible.open { transition: none; } }
 .folder-list:empty::before { content: 'Drop workspaces here'; display: block; padding: 4px 8px; font-size: 12px; font-style: italic; color: var(--muted, #6b7280); }
 </style>
