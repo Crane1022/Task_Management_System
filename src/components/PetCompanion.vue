@@ -113,6 +113,7 @@ function patIt() {
 function enter() { hover.value = true; showTools.value = true; wake() }
 function leave() { hover.value = false; later(() => { if (!hover.value && !bubble.value) showTools.value = false }, 600) }
 
+
 // ----- window size, activity, greeting -----
 let raf = 0
 const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { vw.value = window.innerWidth; vh.value = window.innerHeight }) }

@@ -150,7 +150,6 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
           <!-- B. appearance -->
           <section v-else-if="tab === 'appearance'" class="card mt-4 space-y-5">
             <div class="grid gap-3 sm:grid-cols-2">
-              <div><label class="label" for="c-name">Pet name</label><input id="c-name" v-model="draft.name" class="input" :maxlength="NAME_MAX" placeholder="e.g. Mochi" /></div>
               <div>
                 <span class="label">Accessory</span>
                 <div class="flex flex-wrap gap-1.5">
@@ -290,6 +289,10 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
             </div>
             <p class="mt-2 text-center text-sm font-extrabold">{{ draft.name || animal?.name || 'Your companion' }}</p>
             <p v-if="previewingOther" class="text-center text-xs text-muted">Previewing {{ getAnimal(browsing)?.name }}</p>
+            <div class="mt-3">
+              <label class="label" for="c-name">Rename your pet</label>
+              <input id="c-name" v-model="draft.name" class="input" :maxlength="NAME_MAX" :placeholder="animal?.name || 'e.g. Mochi'" />
+            </div>
             <button v-if="previewingOther" class="btn-primary mt-3 w-full" @click="choose"><Check class="h-4 w-4" />Select companion</button>
             <div class="mt-3 flex flex-wrap justify-center gap-1.5">
               <button class="btn-ghost px-2.5 py-1 text-xs" @click="show('happy')">Pat</button>
