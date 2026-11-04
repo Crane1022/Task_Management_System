@@ -11,9 +11,13 @@
 //           not yet linked to a PMS record, up to 50                                     -> { ok, tasks: [...] }
 //   link    Director, or a user whose department is the task's.  taskId, data: { pmsLink: { type, id } }
 //           Refused when the task is linked to something else already                    -> { ok, taskId, pmsKey }
+//   performanceTasks  Director only.  data: { employeeUid }. Every task assigned to that person, with its workspace,
+//           for the PMS performance module. Super Private workspaces are left out (see _pms-performance.js)
+//                                                                                        -> { ok, tasks: [...] }
 import { randomUUID } from 'node:crypto'
 import { addActivities } from './_lib/activity.js'
 import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
+import { performanceTasks } from './_pms-performance.js'
 
 const BOARD_ID = 'main' // src/utils/constants.js BOARD_ID
 const DEFAULT_PROJECT_ID = 'general'
@@ -301,5 +305,6 @@ export default handle(async (req) => {
   if (action === 'list') return list(me, data || {})
   if (action === 'inbox') return inbox(me, data || {})
   if (action === 'link') return link(me, taskId, data || {})
+  if (action === 'performanceTasks') return performanceTasks(getServices().db, me, data || {})
   throw new HttpError(400, 'Unknown action')
-})
+})
