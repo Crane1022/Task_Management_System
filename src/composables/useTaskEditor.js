@@ -21,7 +21,8 @@ export function useTaskEditor() {
   // the "New task" button in the top bar
   watch(() => ui.newTaskTick, () => openNew(board.columns[0]?.id))
 
-  async function create(data, columnId, destBoardId) { await board.addTask(data, columnId, destBoardId); close() }
+  // `ticket`: the PMS ticket fields of a new task on a Maintenance board (null otherwise)
+  async function create(data, columnId, destBoardId, ticket = null) { if (await board.addTask(data, columnId, destBoardId, ticket)) close() } // stays open if it failed
   async function save(changes, notes) { await board.saveTask(modal.value.task, changes, notes); close() }
   async function remove() { await board.removeTask(modal.value.task); close() }
   async function move(destValue, columnId) { if (await board.moveToBoard(modal.value.task, destValue, columnId)) close() }

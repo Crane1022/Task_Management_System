@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Plus, SearchX, Archive, Star, Settings2, Eye, ShieldOff } from 'lucide-vue-next'
 import { useBoardStore, OTHER_COLUMN } from '@/stores/board'
 import { useAuthStore } from '@/stores/auth'
@@ -23,6 +23,7 @@ const auth = useAuthStore()
 const ui = useUiStore()
 const wsStore = useWorkspaceStore()
 const route = useRoute()
+const router = useRouter()
 const settingsOpen = ref(false)
 const editor = reactive(useTaskEditor())
 
@@ -44,7 +45,9 @@ const doneChange = ref(null) // { column, changes } waiting for confirmation
 const showArchived = ref(false)
 
 onMounted(() => {
-  if (route.params.bid) ui.setActiveBoard(route.params.bid) // /b/:bid opens that board
+  // /b/:bid opens that board; the Kanban Board page (/board) always opens on the Main board (switch with the board picker)
+  if (route.params.bid) ui.setActiveBoard(route.params.bid)
+  else if (route.name === 'board') ui.setActiveBoard('main')
   board.clearFilters()
   if (props.mine) board.filters.assignee = 'me'
   board.start(undefined, { aggregate: true }) // on the Main Board this also shows the tasks of every workspace board the person may open
@@ -117,7 +120,7 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
         <ShieldOff class="mx-auto h-8 w-8 text-muted" />
         <h2 class="mt-2 text-base font-extrabold">You do not have access to this board</h2>
         <p class="mt-1 text-sm text-muted">Ask an admin of its workspace to add you as a member.</p>
-        <button class="btn-primary mt-4" @click="ui.setActiveBoard('main')">Go to the Main board</button>
+        <button class="btn-primary mt-4" @click="router.push('/board')">Go to the Main board</button>
       </div>
     </div>
 

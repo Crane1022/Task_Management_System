@@ -27,6 +27,7 @@ const destinations = computed(() => (board.aggregate || task.value ? board.desti
     :default-column-id="editor.modal.columnId" :default-department="auth.profile.departmentId"
     :can-delete="canDelete" :can-moderate="role === 'admin'" :readonly="readonly"
     :board-label="task ? board.boardLabelOf(task) : ''" :destinations="destinations" :current-board-id="board.boardId" :load-columns="board.loadColumnsFor"
+    :ticket-board-for="board.ticketBoardFor" :profile="auth.profile"
     @close="editor.close()" @create="editor.create" @save="editor.save" @delete="editor.remove" @move="editor.move"
   />
 </template>

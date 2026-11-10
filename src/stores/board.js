@@ -9,6 +9,8 @@ import { subscribeColumns, fetchColumns, createColumn, renameColumn, deleteColum
 import { subscribeBoardTasks, createTask, updateTask, moveTask, moveTaskToBoard, deleteTask, moveAllTasks } from '@/services/taskService'
 import { subscribeUsers } from '@/services/userService'
 import { subscribeBoardDoc, subscribeWorkspace } from '@/services/workspaceService'
+import { pushToPms, raiseInPms, syncIssue, clearDeletedTickets } from '@/services/pmsIssues'
+import { isIssueTask, MAINTENANCE_WORKSPACE } from '@/utils/issueStatus'
 import { startOfToday } from '@/utils/dates'
 import { STEP, byPosition, positionBetween, mergeColumnOrder } from '@/utils/ordering'
 import { effectiveBoardRole, legacyBoardRole, workspaceRoleFor, canEdit as roleCanEdit, canManage as roleCanManage } from '@/utils/permissions'
@@ -264,22 +266,80 @@ export const useBoardStore = defineStore('board', () => {
   const resetTasks = () => { ownTasks.value = [...ownTasks.value]; extraTasks.value = { ...extraTasks.value } }
   const resetColumns = () => { columns.value = [...columns.value] }
 
+  // ----- PMS Maintenance tickets (docs/PMS_LINK.md, "Maintenance tickets") -----
+  // A board of the Maintenance workspace: each of its tasks is a PMS ticket (IS-0001). A ticket's card is written to the
+  // PMS first (pushToPms) and only changed here when the PMS accepts, so both sides always agree.
+  function isMaintenanceBoard(id) {
+    const b = id === boardId.value ? boardDoc.value : wsStore.boardById(id)
+    if (!b) return false
+    const w = workspace.value?.id === b.workspaceId ? workspace.value : wsStore.workspaceById(b.workspaceId)
+    return !!w && !w.archived && w.name === MAINTENANCE_WORKSPACE
+  }
+  // Opening a Maintenance board removes the cards of tickets deleted in the PMS (once per board per visit of the app)
+  const checkedBoards = new Set()
+  watch([loading, resolved, workspace], async () => {
+    const id = boardId.value
+    if (loading.value || !resolved.value || checkedBoards.has(id) || !isMaintenanceBoard(id)) return
+    checkedBoards.add(id)
+    const removed = await clearDeletedTickets(ownTasks.value).catch(() => [])
+    if (removed.length) ui.toast(`Removed ${removed.length} card${removed.length === 1 ? '' : 's'} of ticket${removed.length === 1 ? '' : 's'} deleted in the PMS: ${removed.join(', ')}`)
+  })
+
+  // the board, when it is a Maintenance board (the task form then shows the PMS "Raise a ticket" fields), else null
+  const ticketBoardFor = (id) => (isMaintenanceBoard(id) ? (id === boardId.value ? boardDoc.value : wsStore.boardById(id)) : null)
+  // A task added on a Maintenance board: the ticket is raised in the PMS (with the form's PMS fields), the server makes
+  // its task (in the Open column), then what else was filled in is saved on it and it goes to the column it was added to.
+  async function addTicketTask(data, column, destBoardId, workspaceId, ticket) {
+    if (!ticket?.choices) throw new Error('The PMS ticket details are missing. Close the form and try again')
+    const { id } = await raiseInPms({ ...ticket, title: data.title, body: data.description ?? '' }, ticket.choices, auth.profile)
+    let made
+    try { made = await syncIssue(id, destBoardId) } catch (e) {
+      throw new Error(`${id} was raised in the PMS, but its card could not be made here (${e.message}). It appears after the ticket's next change in the PMS`)
+    }
+    if (!made.taskId) throw new Error(`${id} was raised in the PMS but not sent here: ${made.skipped}`)
+    // the rest of the form; the department stays the ticket's (Operations / Procurement), the labels keep PMS and the IS number
+    const { title, description, departmentId, ...rest } = data
+    const extra = Object.fromEntries(Object.entries(rest).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length)))
+    if (extra.labels) extra.labels = [...new Set(['PMS', id, ...extra.labels])]
+    if (Object.keys(extra).length) await updateTask(made.taskId, extra, [], auth.profile)
+    const task = { id: made.taskId, boardId: made.boardId, columnId: made.columnId, pmsLink: { type: 'issue', id } }
+    if (made.columnId !== column.id) { // the column it was added to
+      await pushToPms(task, { column, columns: columnsFor(destBoardId) }, auth.profile)
+      await moveTask(task, column, endPosition(column.id), auth.profile)
+    }
+    notif.taskAssigned({ id: made.taskId, title: data.title, boardId: made.boardId, workspaceId }, data.assignedTo ?? [])
+    ui.toast(`Ticket ${id} raised in the PMS`)
+    companion.react('created')
+    return true
+  }
+
   // ----- tasks -----
   // `destBoardId`: on the Main Board a task can be created in any workspace board the person may add to; on a workspace
   // board it is always this board (and this workspace).
-  const addTask = (data, columnId, destBoardId = boardId.value) => run(async () => {
+  // Resolves true when the task was made (the form closes), otherwise undefined (the form stays open)
+  const addTask = (data, columnId, destBoardId = boardId.value, ticket = null) => run(async () => {
     if (!['admin', 'member'].includes(roleOfBoard(destBoardId))) { ui.toast('You cannot add tasks to that board', 'error'); return }
     const column = columnsFor(destBoardId).find((c) => c.id === columnId)
     if (!column) { ui.toast('Choose a column for the task', 'error'); return }
     const workspaceId = destBoardId === boardId.value ? boardDoc.value?.workspaceId ?? null : wsStore.boardById(destBoardId)?.workspaceId ?? null
+    if (isMaintenanceBoard(destBoardId)) return addTicketTask(data, column, destBoardId, workspaceId, ticket)
     const id = await createTask(data, column, endPosition(columnId), auth.profile, workspaceId)
     notif.taskAssigned({ id, title: data.title, boardId: destBoardId, workspaceId }, data.assignedTo ?? [])
     ui.toast('Task created')
     companion.react('created')
+    return true
   }, 'Could not create task')
 
   const saveTask = (task, changes, notes) => run(async () => {
     const column = columnsFor(task.boardId).find((c) => c.id === changes.columnId)
+    const moving = !!column && column.id !== task.columnId
+    // a ticket's card: status, title and description go to the PMS first (it may refuse); other fields are TMS only
+    if (isIssueTask(task) && (moving || 'title' in changes || 'description' in changes)) {
+      await pushToPms(task, {
+        column: moving ? column : null, columns: columnsFor(task.boardId),
+        title: 'title' in changes ? changes.title : null, description: 'description' in changes ? changes.description : null,
+      }, auth.profile)
+    }
     if (column) { // moved from the status dropdown (a column of the task's own board)
       await moveTask(task, column, endPosition(column.id), auth.profile)
       if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
@@ -299,6 +359,11 @@ export const useBoardStore = defineStore('board', () => {
     const column = cols.find((c) => c.id === columnId) ?? columnByStatus(cols, task.status) ?? cols.find((c) => !c.archived)
     if (!column) { ui.toast('That board has no columns yet', 'error'); return false }
     const known = tasks.value.some((t) => t.columnId === column.id)
+    if (isIssueTask(task)) { // a ticket's card: its status, and its property when it goes to another property's board
+      const toBoard = wsStore.boardById(dest.boardId)
+      const property = dest.boardId !== task.boardId && isMaintenanceBoard(dest.boardId) && toBoard ? { name: toBoard.name, id: toBoard.pmsPropertyId || null } : null
+      await pushToPms(task, { column, columns: cols, property }, auth.profile)
+    }
     await moveTaskToBoard(task, dest, column, known ? endPosition(column.id) : Date.now(), auth.profile)
     notif.taskMoved(task, `${dest.label} › ${column.name}`, column.isDone)
     if (column.isDone) companion.react('completed')
@@ -306,7 +371,10 @@ export const useBoardStore = defineStore('board', () => {
     return true
   }, 'Could not move the task')
 
-  const removeTask = (task) => run(async () => { await deleteTask(task.id); ui.toast('Task deleted') }, 'Could not delete task')
+  const removeTask = (task) => run(async () => {
+    await deleteTask(task.id)
+    ui.toast(isIssueTask(task) ? `Task deleted. The PMS ticket ${task.pmsLink.id} stays; its next change there brings the card back` : 'Task deleted')
+  }, 'Could not delete task')
 
   // Called after a drop. `ids` is the final card order of the target column as shown on screen.
   const dropTask = ({ taskId, columnId, ids }) => run(async () => {
@@ -327,6 +395,8 @@ export const useBoardStore = defineStore('board', () => {
     const next = tasks.value.find((t) => t.id === ids[i + 1])
     const position = positionBetween(prev?.position, next?.position)
     if (task.columnId === column.id && task.position === position) return
+    // a ticket's card changing column: the PMS first (it refuses, e.g., a locked Completed ticket; the card then goes back)
+    if (task.columnId !== column.id) await pushToPms(task, { column, columns: columnsFor(task.boardId) }, auth.profile)
     await moveTask(task, column, position, auth.profile)
     if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
     if (column.isDone && task.columnId !== column.id) companion.react('completed') // a card dropped into a completed column
@@ -338,9 +408,17 @@ export const useBoardStore = defineStore('board', () => {
     await createColumn(boardId.value, name, last + STEP)
     ui.toast('Column added')
   }, 'Could not add column')
-  const rename = (column, name) => run(
-    () => renameColumn(column, name, ownTasks.value.filter((t) => t.columnId === column.id).map((t) => t.id)),
-    'Could not rename column')
+  const rename = (column, name) => run(async () => {
+    await renameColumn(column, name, ownTasks.value.filter((t) => t.columnId === column.id).map((t) => t.id))
+    await pushColumnToTickets({ ...column, name }, columns.value.map((c) => (c.id === column.id ? { ...c, name } : c)))
+  }, 'Could not rename column')
+  // The PMS shows each ticket's column name: after a rename (or a column's tasks moving) tell the tickets in it.
+  // Best effort: a ticket the person may not change, or a Completed one, keeps its old name. Returns the IS numbers that failed.
+  async function pushColumnToTickets(column, cols, quiet = true) {
+    const linked = ownTasks.value.filter((t) => t.columnId === column.id && isIssueTask(t))
+    const results = await Promise.allSettled(linked.map((t) => pushToPms(t, { column, columns: cols, quiet }, auth.profile)))
+    return linked.filter((_, i) => results[i].status === 'rejected').map((t) => t.pmsLink.id)
+  }
   const updateColumnSettings = (column, changes) => run(() => updateColumn(column.id, changes), 'Could not update column')
   const archiveColumn = (column, archived) => run(async () => {
     await updateColumn(column.id, { archived })
@@ -358,8 +436,13 @@ export const useBoardStore = defineStore('board', () => {
     if (ownTaskCount(column.id) > 0) {
       const target = columns.value.find((c) => c.id === targetId)
       if (!target) { ui.toast('Choose where to move the tasks first', 'error'); return }
+      const tickets = ownTasks.value.filter((t) => t.columnId === column.id && isIssueTask(t))
       const moved = await moveAllTasks(column, target, auth.profile)
       ui.toast(`${moved} task${moved === 1 ? '' : 's'} moved to ${target.name}`)
+      // tickets of the moved cards follow the new column; any the PMS refused are named so they can be changed there
+      const results = await Promise.allSettled(tickets.map((t) => pushToPms(t, { column: target, columns: columns.value }, auth.profile)))
+      const failed = tickets.filter((_, i) => results[i].status === 'rejected').map((t) => t.pmsLink.id)
+      if (failed.length) ui.toast(`Not changed in the PMS (change them there): ${failed.join(', ')}`, 'error')
     }
     await deleteColumn(column.id)
     ui.toast('Column deleted')
@@ -370,7 +453,7 @@ export const useBoardStore = defineStore('board', () => {
     boardId, boardDoc, workspace, legacy, resolved, role, canEdit, canManage, canDeleteColumn, boardName, denied, aggregate,
     columns, activeColumns, archivedColumns, tasks, ownTasks, filtered, users, loading, error, filters, hasFilters,
     unplacedTasks, destinations,
-    start, stop, clearFilters, tasksIn, columnsFor, loadColumnsFor, columnNameOf, boardLabelOf, roleOfBoard,
+    start, stop, clearFilters, tasksIn, columnsFor, loadColumnsFor, columnNameOf, boardLabelOf, roleOfBoard, ticketBoardFor,
     addTask, saveTask, moveToBoard, removeTask, dropTask, addColumn, rename, updateColumnSettings, archiveColumn, moveColumn,
     taskCount, ownTaskCount, removeColumn, seedColumns,
   }

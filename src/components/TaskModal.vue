@@ -10,6 +10,7 @@ import DescriptionLinks from './DescriptionLinks.vue'
 import TaskComments from './TaskComments.vue'
 import TaskActivity from './TaskActivity.vue'
 import TaskMove from './TaskMove.vue'
+import PmsTicketFields from './PmsTicketFields.vue'
 
 const props = defineProps({
   task: Object, // null = creating
@@ -26,6 +27,9 @@ const props = defineProps({
   destinations: { type: Array, default: () => [] },
   currentBoardId: String,
   loadColumns: Function, // (boardId) -> columns of that board
+  // (boardId) -> the board when it is a Maintenance board (a new task there is a PMS ticket), else null
+  ticketBoardFor: { type: Function, default: () => null },
+  profile: Object, // the signed-in person (for the PMS ticket fields)
 })
 const emit = defineEmits(['close', 'create', 'save', 'delete', 'move'])
 
@@ -68,6 +72,19 @@ watch(destValue, async (v) => {
 })
 if (pickDestination) props.loadColumns(destValue.value).then((cols) => { statusColumns.value = cols.filter((c) => !c.archived); form.value.columnId = statusColumns.value[0]?.id ?? '' })
 
+// A new task on a Maintenance board is raised as a PMS ticket: the PMS "Raise a ticket" fields are shown too
+const ticketBoard = computed(() => (t ? null : props.ticketBoardFor(destValue.value)))
+const ticket = ref({ type: '', unit: null, unitText: '', tags: [], links: [], choices: null, ready: false })
+function ticketError() {
+  const k = ticket.value
+  if (!k.ready) return 'The PMS ticket details have not loaded. Close the form and try again.'
+  if (!k.type) return 'Choose Customer or In-house.'
+  if (k.type === 'customer' && !k.unit && !k.unitText.trim()) return 'Choose the unit for a customer ticket.'
+  if (!form.value.description.trim()) return 'Describe what happened.'
+  if (!k.tags.length) return 'Tag at least one role to handle it.'
+  return ''
+}
+
 onMounted(() => document.addEventListener('keydown', onKey))
 onUnmounted(() => document.removeEventListener('keydown', onKey))
 const onKey = (e) => e.key === 'Escape' && !confirmDelete.value && emit('close')
@@ -102,9 +119,15 @@ function payload() {
 }
 
 function submit() {
-  if (!form.value.title.trim()) { error.value = 'Give the task a title.'; return }
+  if (!form.value.title.trim()) { error.value = ticketBoard.value ? 'Give the ticket a title.' : 'Give the task a title.'; return }
+  if (ticketBoard.value && (error.value = ticketError())) return
+  error.value = ''
   const data = payload()
-  if (!t) { emit('create', data, form.value.columnId, destValue.value); return }
+  if (!t) {
+    const k = ticket.value
+    emit('create', data, form.value.columnId, destValue.value, ticketBoard.value ? { type: k.type, unit: k.unit, unitText: k.unitText, tags: [...k.tags], links: [...k.links], choices: k.choices } : null)
+    return
+  }
 
   // Edit: send only what changed, and describe each change for the activity log.
   const changes = {}
@@ -132,7 +155,7 @@ function submit() {
       <fieldset :disabled="readonly" class="min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <div>
           <label class="label" for="t-title">Title</label>
-          <input id="t-title" v-model="form.title" class="input text-base font-bold" placeholder="e.g. Prepare Unit A101 for new tenant" autofocus />
+          <input id="t-title" v-model="form.title" class="input text-base font-bold" maxlength="200" :placeholder="ticketBoard ? 'e.g. Aircond leaking in master bedroom' : 'e.g. Prepare Unit A101 for new tenant'" autofocus />
           <p v-if="error" class="mt-1 text-xs font-semibold text-red-600" role="alert">{{ error }}</p>
           <p v-if="boardLabel" class="mt-1 text-[11px] font-bold text-muted">On {{ boardLabel }}</p>
         </div>
@@ -143,15 +166,17 @@ function submit() {
           </select>
           <p class="mt-1 text-[11px] text-muted">Only boards you may add tasks to are listed. The task appears on that board and on the Main Board.</p>
         </div>
+        <PmsTicketFields v-if="ticketBoard" v-model="ticket" :board="ticketBoard" :profile="profile" part="top" />
         <div>
-          <label class="label" for="t-desc">Description</label>
+          <label class="label" for="t-desc">{{ ticketBoard ? 'What happened' : 'Description' }}<span v-if="ticketBoard" class="text-red-600"> *</span></label>
           <!-- with text in it, the description is shown with its links blue, underlined and clickable; click the text to edit it -->
           <div v-if="form.description.trim() && !editingDesc" class="input min-h-[4.5rem] text-sm" :class="readonly ? 'cursor-default' : 'cursor-text'" :tabindex="readonly ? -1 : 0" :role="readonly ? undefined : 'button'" :aria-label="readonly ? undefined : 'Edit the description'"
             @click="startEditDesc" @keydown.enter.self.prevent="startEditDesc"><LinkifiedText :text="form.description" /></div>
-          <textarea v-else-if="!readonly" id="t-desc" ref="descBox" v-model="form.description" rows="3" class="input" @blur="editingDesc = false" />
+          <textarea v-else-if="!readonly" id="t-desc" ref="descBox" v-model="form.description" rows="3" class="input" :placeholder="ticketBoard ? 'Describe the issue, when it started and what you have tried' : null" @blur="editingDesc = false" />
           <p v-else class="text-sm text-muted">No description.</p>
           <DescriptionLinks v-if="t && !readonly" :task-id="t.id" :text="form.description" :attachments="(liveTask ?? t).attachments ?? []" />
         </div>
+        <PmsTicketFields v-if="ticketBoard" v-model="ticket" :board="ticketBoard" :profile="profile" part="bottom" />
 
         <div class="grid grid-cols-2 gap-3">
           <div><label class="label" for="t-status">Status</label>
@@ -211,7 +236,7 @@ function submit() {
         <span v-else />
         <div class="flex gap-2">
           <button type="button" class="btn-ghost" @click="emit('close')">Cancel</button>
-          <button v-if="!readonly" class="btn-primary">{{ t ? 'Save changes' : 'Create task' }}</button>
+          <button v-if="!readonly" class="btn-primary">{{ t ? 'Save changes' : ticketBoard ? 'Raise ticket' : 'Create task' }}</button>
         </div>
       </footer>
     </form>

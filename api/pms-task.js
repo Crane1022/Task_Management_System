@@ -11,6 +11,11 @@
 //           not yet linked to a PMS record, up to 50                                     -> { ok, tasks: [...] }
 //   link    Director, or a user whose department is the task's.  taskId, data: { pmsLink: { type, id } }
 //           Refused when the task is linked to something else already                    -> { ok, taskId, pmsKey }
+//   issue   Any active PMS staff who can see the ticket.  data: { id: 'IS-0001', boardId? }. Makes or updates the
+//           ticket's task in the Maintenance workspace from the ticket itself (read from the PMS as the caller), see
+//           _pms-issues.js                                                               -> { ok, taskId, column, status }
+//   maintenanceBoards  Any active PMS staff. The property boards of the Maintenance workspace (the PMS Property list)
+//                                                                       -> { boards: [{ id, name, pmsPropertyId }] }
 //   performanceTasks  Director only.  data: { employeeUid }. Every task assigned to that person, with its workspace,
 //           for the PMS performance module. Super Private workspaces are left out (see _pms-performance.js)
 //                                                                                        -> { ok, tasks: [...] }
@@ -18,11 +23,11 @@ import { randomUUID } from 'node:crypto'
 import { addActivities } from './_lib/activity.js'
 import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
+import { syncIssue, maintenanceBoards } from './_pms-issues.js'
+import { MAIN_BOARD as BOARD_ID, boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
-const BOARD_ID = 'main' // src/utils/constants.js BOARD_ID
 const DEFAULT_PROJECT_ID = 'general'
 const PRIORITIES = ['low', 'medium', 'high', 'urgent']
-const STEP = 1000 // gap between card positions, as on the board
 const UID = /^[A-Za-z0-9_-]{1,128}$/
 const LINK_TYPE = /^[A-Za-z0-9_-]{1,40}$/
 
@@ -49,32 +54,18 @@ function linkFrom(v) {
   return { type, id }
 }
 
-// Columns of the board in order. The first open column is where new tasks go, like the "New task" button.
-async function boardColumns(db) {
-  const snap = await db.collection('columns').where('boardId', '==', BOARD_ID).get()
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-}
-async function endPosition(db, columnId) {
-  const snap = await db.collection('tasks').where('columnId', '==', columnId).get()
-  return snap.docs.reduce((m, d) => Math.max(m, d.data().position ?? 0), 0) + STEP
-}
+// Columns come from the task's OWN board (a task of a workspace board, e.g. Owner Leads, moves within that board).
+// New tasks made by `create` go on the Main board, to its first open column, like the "New task" button.
 // Moves a task forward to the open column with this name (e.g. 'todo', 'doing'), never backwards: a task already in
 // that column or a later one stays where it is. Returns the changes to write, or null.
 async function forwardTo(db, t, name) {
   if (t.completedAt) return null
-  const columns = await boardColumns(db)
+  const columns = await boardColumns(db, t.boardId || BOARD_ID)
   const want = name.replace(/\s/g, '').toLowerCase()
   const target = columns.find((c) => !c.archived && !c.isDone && String(c.name).replace(/\s/g, '').toLowerCase() === want)
   const here = columns.find((c) => c.id === t.columnId)
   if (!target || target.id === t.columnId || (here && (here.position ?? 0) >= (target.position ?? 0))) return null
   return { columnId: target.id, status: target.name.toUpperCase(), position: await endPosition(db, target.id), columnName: target.name }
-}
-// A batch that fails because the task changed since it was read means two people saved at the same moment: ask to try again
-async function commitOrConflict(batch) {
-  try { await batch.commit() } catch (e) {
-    if (e?.code === 9 || e?.code === 'failed-precondition') throw new HttpError(409, 'The task was changed at the same moment. Please try again.')
-    throw e
-  }
 }
 
 // Each assignee needs a TMS profile so the board can show their name. Someone who has never signed in to the
@@ -206,7 +197,7 @@ async function update(me, taskId, data) {
   }
 
   if (typeof data.completed === 'boolean' && data.completed !== !!t.completedAt) {
-    const columns = await boardColumns(db)
+    const columns = await boardColumns(db, t.boardId || BOARD_ID)
     const open = columns.filter((c) => !c.archived)
     // Completed -> the done column; reopened -> the first open column that is not a done column
     const target = data.completed
@@ -305,6 +296,8 @@ export default handle(async (req) => {
   if (action === 'list') return list(me, data || {})
   if (action === 'inbox') return inbox(me, data || {})
   if (action === 'link') return link(me, taskId, data || {})
+  if (action === 'issue') return syncIssue(me, data || {})
+  if (action === 'maintenanceBoards') return maintenanceBoards()
   if (action === 'performanceTasks') return performanceTasks(getServices().db, me, data || {})
   throw new HttpError(400, 'Unknown action')
 })

@@ -14,8 +14,9 @@ export const app = initializeApp({
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
-// The Widebed PMS project, used only to check a staff member's PMS email and password at sign-in
-// (see docs/PMS_LINK.md). Its web config is public, like ours; it never reads or writes PMS data.
+// The Widebed PMS project: checks a staff member's PMS email and password at sign-in (see docs/PMS_LINK.md), and
+// writes Maintenance ticket changes back to the PMS AS THAT PERSON (src/services/pmsIssues.js), so the PMS rules decide
+// what they may change. Its web config is public, like ours; no PMS key is kept here.
 const pmsApp = initializeApp({
   apiKey: import.meta.env.VITE_PMS_API_KEY,
   authDomain: import.meta.env.VITE_PMS_AUTH_DOMAIN,
@@ -24,3 +25,4 @@ const pmsApp = initializeApp({
   appId: import.meta.env.VITE_PMS_APP_ID,
 }, 'pms')
 export const pmsAuth = getAuth(pmsApp)
+export const pmsDb = getFirestore(pmsApp)

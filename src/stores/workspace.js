@@ -39,16 +39,34 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const canManageMembers = (ws) => !!ws && roleIn(ws) === 'admin'
   const isOwner = (ws) => !!ws && ws.createdBy === auth.user?.uid
 
+  // One live board list per workspace. If the server refuses or drops it (most often: a workspace that was JUST created
+  // shows up here from this browser before the server has saved it, so the server says "no access" to its boards),
+  // the listener is started again a moment later instead of staying dead until the page is reloaded.
+  const retryTimers = new Map() // workspaceId -> timer
+  const retryCount = new Map() // workspaceId -> failed attempts in a row
+  function watchBoards(wid) {
+    if (boardUnsubs.has(wid) || retryTimers.has(wid)) return
+    boardUnsubs.set(wid, svc.subscribeBoards(wid, (b) => {
+      retryCount.delete(wid)
+      boards.value = { ...boards.value, [wid]: b }
+    }, (e) => {
+      console.warn(`Board list for workspace ${wid} stopped (${e.code ?? e.message}); trying again`)
+      boardUnsubs.delete(wid) // a listener that reported an error is already closed by Firestore
+      const n = (retryCount.get(wid) ?? 0) + 1
+      retryCount.set(wid, n)
+      retryTimers.set(wid, setTimeout(() => {
+        retryTimers.delete(wid)
+        if (workspaces.value.some((w) => w.id === wid)) watchBoards(wid)
+      }, Math.min(1000 * 2 ** (n - 1), 30000))) // 1s, 2s, 4s … at most 30s
+    }))
+  }
   function syncBoards(list) {
     const ids = new Set(list.map((w) => w.id))
     for (const [id, stop] of boardUnsubs) {
       if (!ids.has(id)) { stop(); boardUnsubs.delete(id); const next = { ...boards.value }; delete next[id]; boards.value = next }
     }
-    for (const w of list) {
-      if (!boardUnsubs.has(w.id)) {
-        boardUnsubs.set(w.id, svc.subscribeBoards(w.id, (b) => (boards.value = { ...boards.value, [w.id]: b }), () => {}))
-      }
-    }
+    for (const [id, t] of retryTimers) if (!ids.has(id)) { clearTimeout(t); retryTimers.delete(id); retryCount.delete(id) }
+    for (const w of list) watchBoards(w.id)
   }
 
   // Workspaces made before Super Private existed have no superPrivate field, and a Director's list cannot find those.
@@ -81,6 +99,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function stop() {
     unsubs.forEach((u) => u()); unsubs = []
     boardUnsubs.forEach((u) => u()); boardUnsubs.clear()
+    retryTimers.forEach((t) => clearTimeout(t)); retryTimers.clear(); retryCount.clear()
     workspaces.value = []; boards.value = {}; stars.value = []; layout.value = null
   }
 
@@ -120,6 +139,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const addBoard = (wid, data) => run(async () => {
     const id = await svc.createBoard(auth.user.uid, wid, data)
+    // the workspace is certainly saved on the server now: if its board list is waiting to retry, start it right away
+    if (retryTimers.has(wid)) { clearTimeout(retryTimers.get(wid)); retryTimers.delete(wid); watchBoards(wid) }
     ui.toast('Board created')
     return id
   }, 'Could not create board')
