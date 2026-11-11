@@ -125,6 +125,10 @@ test('link: Procurement links an Owner Leads card of another department to NL-00
   const r = await call('tok-pro', { action: 'link', taskId: 't1', data: { pmsLink: { type: 'newOwnerListing', id: 'NL-0009' } } })
   assert.equal(r.code, 200, JSON.stringify(r.body))
   assert.equal(db.store['tasks/t1'].pmsKey, 'newOwnerListing:NL-0009')
+  assert.deepEqual(db.store['tasks/t1'].assignedTo, ['proUid']) // already assigned: not added twice
+  db.store['tasks/t6'] = { boardId: 'bOL', columnId: 'c0', departmentId: 'sales', assignedTo: ['mktUid'], createdAt: ts(), activitySeq: 0 }
+  assert.equal((await call('tok-dir', { action: 'link', taskId: 't6', data: { pmsLink: { type: 'newOwnerListing', id: 'NL-0010' } } })).code, 200)
+  assert.deepEqual(db.store['tasks/t6'].assignedTo, ['mktUid', 'dirUid']) // the starter is added to Assigned to
   // another type on that card, from Procurement: still refused (department rule)
   db.store['tasks/t5'] = { boardId: 'bOL', columnId: 'c0', departmentId: 'sales', createdAt: ts() }
   assert.equal((await call('tok-pro', { action: 'link', taskId: 't5', data: { pmsLink: { type: 'other', id: 'X' } } })).code, 403)
@@ -153,4 +157,18 @@ test('leadChanges: statuses, aging stamps both ways, cancel and Director-only re
   assert.throws(() => leadChanges({ id: 'NL-0001', status: 'progress' }, col('NEW'), DIR, 'NOW', 'DEL'), /can't go back to New/)
   r = leadChanges({ id: 'NL-0001', status: 'progress', tmsColumn: 'IN PROGRESS' }, col('WAITING'), ME, 'NOW', 'DEL')
   assert.deepEqual(r, { changes: { tmsColumn: 'WAITING' }, line: null })
+})
+
+test('commentOwnerLead: a comment under the caller name on an Owner Leads card only; Finance refused', async () => {
+  assert.equal((await call('tok-fin', { action: 'commentOwnerLead', taskId: 't1', data: { text: 'Meow' } })).code, 403)
+  assert.equal((await call('tok-pro', { action: 'commentOwnerLead', taskId: 't1', data: { text: '  ' } })).code, 400)
+  assert.equal((await call('tok-pro', { action: 'commentOwnerLead', taskId: 't3', data: { text: 'x' } })).code, 400)
+  const r = await call('tok-mkt', { action: 'commentOwnerLead', taskId: 't1', data: { text: 'Remarks: Meow' } })
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  const c = db.store[`tasks/t1/comments/${r.body.commentId}`]
+  assert.equal(c.text, 'Remarks: Meow')
+  assert.equal(c.userId, 'mktUid')
+  assert.equal(c.userName, 'Mia Marketing')
+  assert.equal(c.fromPms, true)
+  assert.match(db.store['task_activities/t1_2'].action + ' ' + db.store['task_activities/t1_2'].detail, /remarks from the PMS/)
 })

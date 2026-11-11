@@ -23,8 +23,10 @@
 //   moveOwnerLead  Director or Procurement.  taskId, data: { status }. Moves an Owner Leads card to the end of that
 //           status's column (any direction), with the activity line "Moved from the PMS by <name>"
 //                                                                       -> { ok, taskId, column, status, moved }
+//   commentOwnerLead  Director, Procurement, Marketing, Operations.  taskId, data: { text }. Adds a comment to an Owner
+//           Leads card under the caller's name (the PMS sends a listing's Remarks)      -> { ok, taskId, commentId }
 //           Owner Leads cards are linked with `link`, pmsLink { type: 'newOwnerListing', id: 'NL-000n' }; Procurement
-//           may link a card of that board whatever its department.
+//           may link a card of that board whatever its department, and the person linking it is added to Assigned to.
 //   performanceTasks  Director only.  data: { employeeUid }. Every task assigned to that person, with its workspace,
 //           for the PMS performance module. Super Private workspaces are left out (see _pms-performance.js)
 //                                                                                        -> { ok, tasks: [...] }
@@ -33,7 +35,7 @@ import { addActivities } from './_lib/activity.js'
 import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
-import { ownerLeads, moveOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
+import { ownerLeads, moveOwnerLead, commentOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
 import { MAIN_BOARD as BOARD_ID, boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
 const DEFAULT_PROJECT_ID = 'general'
@@ -282,7 +284,8 @@ async function link(me, taskId, data) {
   if (!snap.exists) throw new HttpError(404, 'No such task')
   const t = snap.data()
   // Procurement starts a listing from any card of the Owner Leads board, whatever department it was made in
-  const ownerLead = me.role === 'procurement' && pmsLink.type === OWNER_LEAD_LINK_TYPE && await isOwnerLeadCard(db, t)
+  const leadCard = pmsLink.type === OWNER_LEAD_LINK_TYPE && await isOwnerLeadCard(db, t)
+  const ownerLead = me.role === 'procurement' && leadCard
   if (me.role !== 'director' && !(t.departmentId && myDept(me) === t.departmentId) && !ownerLead) throw new HttpError(403, 'Not a task of your department')
   const key = pmsKey(pmsLink)
   if (t.pmsKey && t.pmsKey !== key) throw new HttpError(409, `This task is linked to ${t.pmsKey} already`)
@@ -294,8 +297,11 @@ async function link(me, taskId, data) {
   const batch = db.batch()
   const logs = [['updated', `linked to ${pmsLink.id} in the PMS`]]
   if (move) logs.push(['moved', `to ${columnName} (accepted in the PMS)`])
+  // Start listing on an Owner Leads card: the person who started it is added to Assigned to
+  const assign = leadCard && !(t.assignedTo || []).includes(me.uid) ? { assignedTo: [...(t.assignedTo || []), me.uid] } : {}
+  if (assign.assignedTo) logs.push(['updated', `Assigned to: added ${me.name} (started the listing in the PMS)`])
   const activitySeq = addActivities(db, FieldValue, batch, taskId, t.activitySeq, me, logs)
-  batch.update(ref, { pmsLink, pmsKey: key, labels: [...new Set([...(t.labels || []), 'PMS'])], ...moved, activitySeq, updatedAt: now }, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
+  batch.update(ref, { pmsLink, pmsKey: key, labels: [...new Set([...(t.labels || []), 'PMS'])], ...moved, ...assign, activitySeq, updatedAt: now }, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
   await commitOrConflict(batch)
   return { ok: true, taskId, pmsKey: key }
 }
@@ -312,6 +318,7 @@ export default handle(async (req) => {
   if (action === 'maintenanceBoards') return maintenanceBoards()
   if (action === 'ownerLeads') return ownerLeads(me)
   if (action === 'moveOwnerLead') return moveOwnerLead(me, taskId, data || {})
+  if (action === 'commentOwnerLead') return commentOwnerLead(me, taskId, data || {})
   if (action === 'performanceTasks') return performanceTasks(getServices().db, me, data || {})
   throw new HttpError(400, 'Unknown action')
 })

@@ -1,4 +1,4 @@
-// actions 'ownerLeads' and 'moveOwnerLead' of /api/pms-task: the PMS Procurement > Owner Leads pages read and move the
+// actions 'ownerLeads', 'moveOwnerLead' and 'commentOwnerLead' of /api/pms-task: the PMS Procurement > Owner Leads pages read and move the
 // cards of the TMS board "Owner Leads" in the workspace "Business Development & Procurement". See docs/PMS_LINK.md,
 // "Owner Leads".
 //
@@ -96,4 +96,29 @@ export async function moveOwnerLead(me, taskId, data) {
   batch.update(ref, changes, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
   await commitOrConflict(batch)
   return { ok: true, taskId, column: target.name, status: want, moved: true }
+}
+
+// action 'commentOwnerLead'. Director, Procurement, Marketing, Operations. taskId, data: { text } -> a comment on an
+// Owner Leads card (tasks/{id}/comments, shown under Comments with the caller's name), plus an activity line. The PMS
+// sends a listing's Remarks this way when they are first filled in or changed.          -> { ok, taskId, commentId }
+export async function commentOwnerLead(me, taskId, data) {
+  if (!LEADS_READ_ROLES.includes(me.role)) throw new HttpError(403, 'Owner Leads are not open to your role')
+  if (!taskId || typeof taskId !== 'string' || taskId.includes('/')) throw new HttpError(400, 'taskId is missing')
+  const body = text(data.text, 2000)
+  if (!body) throw new HttpError(400, 'text is missing')
+  const { db, FieldValue } = getServices()
+  const board = await ownerLeadsBoard(db)
+  const ref = db.collection('tasks').doc(taskId)
+  const snap = await ref.get()
+  if (!snap.exists) throw new HttpError(404, 'No such task')
+  const t = snap.data()
+  if (t.boardId !== board.id) throw new HttpError(400, `This task is not on the ${OWNER_LEADS_BOARD} board`)
+  const now = FieldValue.serverTimestamp()
+  const cRef = db.collection(`tasks/${taskId}/comments`).doc()
+  const batch = db.batch()
+  batch.set(cRef, { text: body, userId: me.uid, userName: me.name, createdAt: now, fromPms: true })
+  const activitySeq = addActivities(db, FieldValue, batch, taskId, t.activitySeq, me, [['commented', 'remarks from the PMS']])
+  batch.update(ref, { activitySeq, updatedAt: now }, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
+  await commitOrConflict(batch)
+  return { ok: true, taskId, commentId: cRef.id }
 }
