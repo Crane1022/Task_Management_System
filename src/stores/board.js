@@ -11,6 +11,8 @@ import { subscribeUsers } from '@/services/userService'
 import { subscribeBoardDoc, subscribeWorkspace } from '@/services/workspaceService'
 import { pushToPms, raiseInPms, syncIssue, clearDeletedTickets, deleteInPms } from '@/services/pmsIssues'
 import { isIssueTask, MAINTENANCE_WORKSPACE } from '@/utils/issueStatus'
+import { pushLeadToPms } from '@/services/pmsOwnerLeads'
+import { isLinkedLead, isOwnerLeadsWorkspace, isOwnerLeadsBoardDoc } from '@/utils/ownerLeadStatus'
 import { startOfToday } from '@/utils/dates'
 import { STEP, byPosition, positionBetween, mergeColumnOrder } from '@/utils/ordering'
 import { effectiveBoardRole, legacyBoardRole, workspaceRoleFor, canEdit as roleCanEdit, canManage as roleCanManage } from '@/utils/permissions'
@@ -275,6 +277,17 @@ export const useBoardStore = defineStore('board', () => {
     const w = workspace.value?.id === b.workspaceId ? workspace.value : wsStore.workspaceById(b.workspaceId)
     return !!w && !w.archived && w.name === MAINTENANCE_WORKSPACE
   }
+  // ----- PMS Owner Leads (docs/PMS_LINK.md, "Owner Leads") -----
+  // A card of the Owner Leads board linked to a PMS listing (NL-0001): its column (the lead status) and title are written
+  // to the PMS first (pushLeadToPms) and only changed here when the PMS accepts.
+  function isOwnerLeadsBoard(id) {
+    const b = id === boardId.value ? boardDoc.value : wsStore.boardById(id)
+    if (!b) return false
+    const w = workspace.value?.id === b.workspaceId ? workspace.value : wsStore.workspaceById(b.workspaceId)
+    return isOwnerLeadsWorkspace(w) && isOwnerLeadsBoardDoc(b)
+  }
+  const isLeadCard = (t) => isLinkedLead(t) && isOwnerLeadsBoard(t.boardId)
+
   // Opening a Maintenance board removes the cards of tickets deleted in the PMS (once per board per visit of the app)
   const checkedBoards = new Set()
   watch([loading, resolved, workspace], async () => {
@@ -340,6 +353,9 @@ export const useBoardStore = defineStore('board', () => {
         title: 'title' in changes ? changes.title : null, description: 'description' in changes ? changes.description : null,
       }, auth.profile)
     }
+    if (isLeadCard(task) && (moving || 'title' in changes)) {
+      await pushLeadToPms(task, { column: moving ? column : null, title: 'title' in changes ? changes.title : null }, auth.profile)
+    }
     if (column) { // moved from the status dropdown (a column of the task's own board)
       await moveTask(task, column, endPosition(column.id), auth.profile)
       if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
@@ -359,6 +375,10 @@ export const useBoardStore = defineStore('board', () => {
     const column = cols.find((c) => c.id === columnId) ?? columnByStatus(cols, task.status) ?? cols.find((c) => !c.archived)
     if (!column) { ui.toast('That board has no columns yet', 'error'); return false }
     const known = tasks.value.some((t) => t.columnId === column.id)
+    if (isLeadCard(task)) { // a PMS listing's card stays on the Owner Leads board; a column change there goes to the PMS
+      if (dest.boardId !== task.boardId) { ui.toast(`${task.pmsLink.id}'s card stays on the Owner Leads board (it is a PMS listing)`, 'error'); return false }
+      await pushLeadToPms(task, { column }, auth.profile)
+    }
     if (isIssueTask(task)) { // a ticket's card: its status, and its property when it goes to another property's board
       const toBoard = wsStore.boardById(dest.boardId)
       const property = dest.boardId !== task.boardId && isMaintenanceBoard(dest.boardId) && toBoard ? { name: toBoard.name, id: toBoard.pmsPropertyId || null } : null
@@ -374,6 +394,7 @@ export const useBoardStore = defineStore('board', () => {
   // A PMS ticket's card: the ticket is deleted in the PMS first (Directors, with a reason; it may refuse), then the server
   // removes the card with its activity records. Resolves true when deleted (the task window then closes).
   const removeTask = (task, reason = '') => run(async () => {
+    if (isLeadCard(task)) { ui.toast(`${task.pmsLink.id} is a PMS listing: move its card to Cancelled instead of deleting it`, 'error'); return }
     if (isIssueTask(task)) {
       const id = task.pmsLink.id
       await deleteInPms(task, reason, auth.profile)
@@ -419,6 +440,7 @@ export const useBoardStore = defineStore('board', () => {
     if (task.columnId === column.id && task.position === position) return
     // a ticket's card changing column: the PMS first (it refuses, e.g., a locked Completed ticket; the card then goes back)
     if (task.columnId !== column.id) await pushToPms(task, { column, columns: columnsFor(task.boardId) }, auth.profile)
+    if (task.columnId !== column.id && isLeadCard(task)) await pushLeadToPms(task, { column }, auth.profile)
     await moveTask(task, column, position, auth.profile)
     if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
     if (column.isDone && task.columnId !== column.id) companion.react('completed') // a card dropped into a completed column
@@ -460,11 +482,14 @@ export const useBoardStore = defineStore('board', () => {
       const target = columns.value.find((c) => c.id === targetId)
       if (!target) { ui.toast('Choose where to move the tasks first', 'error'); return }
       const tickets = ownTasks.value.filter((t) => t.columnId === column.id && isIssueTask(t))
+      const leads = ownTasks.value.filter((t) => t.columnId === column.id && isLeadCard(t))
       const moved = await moveAllTasks(column, target, auth.profile)
       ui.toast(`${moved} task${moved === 1 ? '' : 's'} moved to ${target.name}`)
       // tickets of the moved cards follow the new column; any the PMS refused are named so they can be changed there
       const results = await Promise.allSettled(tickets.map((t) => pushToPms(t, { column: target, columns: columns.value }, auth.profile)))
       const failed = tickets.filter((_, i) => results[i].status === 'rejected').map((t) => t.pmsLink.id)
+      const leadResults = await Promise.allSettled(leads.map((t) => pushLeadToPms(t, { column: target }, auth.profile)))
+      failed.push(...leads.filter((_, i) => leadResults[i].status === 'rejected').map((t) => t.pmsLink.id))
       if (failed.length) ui.toast(`Not changed in the PMS (change them there): ${failed.join(', ')}`, 'error')
     }
     await deleteColumn(column.id)

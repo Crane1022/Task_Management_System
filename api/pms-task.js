@@ -16,6 +16,15 @@
 //           _pms-issues.js                                                               -> { ok, taskId, column, status }
 //   maintenanceBoards  Any active PMS staff. The property boards of the Maintenance workspace (the PMS Property list)
 //                                                                       -> { boards: [{ id, name, pmsPropertyId }] }
+//   ownerLeads  Director, Procurement, Marketing, Operations. Every card of the "Owner Leads" board (workspace
+//           "Business Development & Procurement"), see _pms-owner-leads.js
+//           -> { ok, boardId, leads: [{ taskId, title, description, createdAt, updatedAt, dueDate, column,
+//                status ('new'|'progress'|'signed'|'live'|'cancelled'|null), assigneeUids, createdByName, pmsLink }] }
+//   moveOwnerLead  Director or Procurement.  taskId, data: { status }. Moves an Owner Leads card to the end of that
+//           status's column (any direction), with the activity line "Moved from the PMS by <name>"
+//                                                                       -> { ok, taskId, column, status, moved }
+//           Owner Leads cards are linked with `link`, pmsLink { type: 'newOwnerListing', id: 'NL-000n' }; Procurement
+//           may link a card of that board whatever its department.
 //   performanceTasks  Director only.  data: { employeeUid }. Every task assigned to that person, with its workspace,
 //           for the PMS performance module. Super Private workspaces are left out (see _pms-performance.js)
 //                                                                                        -> { ok, tasks: [...] }
@@ -24,6 +33,7 @@ import { addActivities } from './_lib/activity.js'
 import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
+import { ownerLeads, moveOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
 import { MAIN_BOARD as BOARD_ID, boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
 const DEFAULT_PROJECT_ID = 'general'
@@ -271,7 +281,9 @@ async function link(me, taskId, data) {
   const snap = await ref.get()
   if (!snap.exists) throw new HttpError(404, 'No such task')
   const t = snap.data()
-  if (me.role !== 'director' && !(t.departmentId && myDept(me) === t.departmentId)) throw new HttpError(403, 'Not a task of your department')
+  // Procurement starts a listing from any card of the Owner Leads board, whatever department it was made in
+  const ownerLead = me.role === 'procurement' && pmsLink.type === OWNER_LEAD_LINK_TYPE && await isOwnerLeadCard(db, t)
+  if (me.role !== 'director' && !(t.departmentId && myDept(me) === t.departmentId) && !ownerLead) throw new HttpError(403, 'Not a task of your department')
   const key = pmsKey(pmsLink)
   if (t.pmsKey && t.pmsKey !== key) throw new HttpError(409, `This task is linked to ${t.pmsKey} already`)
   if (t.pmsKey === key) return { ok: true, taskId, pmsKey: key }
@@ -298,6 +310,8 @@ export default handle(async (req) => {
   if (action === 'link') return link(me, taskId, data || {})
   if (action === 'issue') return syncIssue(me, data || {})
   if (action === 'maintenanceBoards') return maintenanceBoards()
+  if (action === 'ownerLeads') return ownerLeads(me)
+  if (action === 'moveOwnerLead') return moveOwnerLead(me, taskId, data || {})
   if (action === 'performanceTasks') return performanceTasks(getServices().db, me, data || {})
   throw new HttpError(400, 'Unknown action')
 })

@@ -5,7 +5,7 @@ The Task Management System (TMS) and the Widebed PMS are two separate Firebase p
 | Function | Called by | What it does |
 |---|---|---|
 | `POST /api/pms-login` | the TMS login page | Takes a PMS ID token and returns a TMS custom token for the **same uid**. On the first sign-in it creates `users/{uid}` (`employee`, no department, `pmsRole`). It never overwrites role or department. |
-| `POST /api/pms-task` | the PMS (`src/lib/tms.js` there) | `create` (Directors only), `update` (Director, an assignee or same-department Procurement: note, completed, checklist ticks or full checklist sync), `list` (by `pmsLink`), `inbox` (unlinked tasks of a department), `link` (point a board task at a PMS record) |
+| `POST /api/pms-task` | the PMS (`src/lib/tms.js` there) | `create` (Directors only), `update` (Director, an assignee or same-department Procurement: note, completed, checklist ticks or full checklist sync), `list` (by `pmsLink`), `inbox` (unlinked tasks of a department), `link` (point a board task at a PMS record), `ownerLeads` and `moveOwnerLead` (the Owner Leads board) |
 
 Staff sign in here with their **PMS email and password**. There is no sign-up. Accounts are made on the PMS Staff accounts page, and a Director (role super_admin) sets department and role on the **Staff** page here. Someone switched off in the PMS is refused at sign-in. A signed-in tab re-checks every 30 minutes and on each load, so they are signed out within half an hour.
 
@@ -22,6 +22,8 @@ Headers: `Authorization: Bearer <PMS ID token>` and `Content-Type: application/j
 | `link` | Director, or a user whose department (from their PMS role) is the task's | `taskId` + `pmsLink` `{ type, id }` | `{ ok, taskId, pmsKey }`; 409 if the task is linked to another record already (the same link again is fine) |
 | `maintenanceBoards` | any active PMS staff | none | `{ boards: [{ id, name, pmsPropertyId }] }`: the property boards of the Maintenance workspace |
 | `issue` | any active PMS staff who can see the ticket in the PMS | `id` (`IS-0001`), `boardId` (optional: a Maintenance board for a new task) | `{ ok, taskId, boardId, columnId, column, status }`; `taskId: null` with `skipped` for a Completed ticket that has no task yet. See **Maintenance tickets** below |
+| `ownerLeads` | Director, Procurement, Marketing, Operations | none | `{ ok, boardId, leads: [{ taskId, title, description, createdAt, updatedAt, dueDate, column, status, assigneeUids, createdByName, pmsLink }] }`: every card of the Owner Leads board, oldest first. See **Owner Leads** below |
+| `moveOwnerLead` | Director, Procurement | `taskId` + `status` (`new`, `progress`, `signed`, `live`, `cancelled`) | `{ ok, taskId, column, status, moved }`: the card goes to the end of that status's column, in any direction |
 
 The PMS New Owner Listings page uses these: Procurement tasks made on the board show in its "From task system" inbox; **Start listing** makes NL-000n and calls `link`; every save sends one `update` (a note of what changed, the listing's checklist as `[{ title, done }]`, and `completed: true` when the listing goes Live). Its Marketing stage `create`s a separate Marketing task (Director) and reads progress with `list`. A department comes from the PMS role (`DEPT_FOR_PMS_ROLE`, procurement -> `procurement`).
 
@@ -53,6 +55,22 @@ Every **Customer** ticket on the PMS Issues page (a guest or tenant's problem at
 **New task on a Maintenance board.** The task form adds the PMS "Raise a ticket" fields (`src/components/PmsTicketFields.vue`), and the button reads **Raise ticket**. It is always a **Customer** ticket, because only those belong in this workspace (In-house matters are raised in the PMS). The fields are: Unit (required: the units of the board's property, read from the PMS, or a typed code for roles that can't read units), Title, "What happened" (the description, required), the roles to tag (their own role is always tagged, Operations is added and can be removed, and at least one role is needed), and Drive links (company Google Drive only; file uploads stay in the PMS). On save, the ticket is raised in the PMS as that person (next IS number; property = the board's property), and the tagged roles are notified as the PMS does. Then the server makes the task on that board, in the column it was added to. Assignees, dates, priority and checklist are saved on the task only. If anything fails, the form stays open. **Deleting a ticket's card in the TMS deletes the ticket in the PMS too**, as the PMS's own Delete ticket does: marked deleted with a reason (asked for in the TMS), never removed. Only PMS Directors see Delete on a ticket's card, because the PMS rules only let Directors delete tickets. The PMS is changed first; if it refuses, the card stays.
 
 **Setup.** 1) Deploy the TMS. 2) Publish the PMS `firestore.rules` Draft 0.47. 3) Deploy the PMS (`tms.js` and the Issues page). 4) Make sure the TMS workspace is named exactly `Maintenance` (or set `MAINTENANCE_WORKSPACE_ID`, with the same name kept), and that the people who move cards are members of it. Existing tickets get their task on their next change.
+
+## Owner Leads (PMS Procurement > Owner Leads <-> the Owner Leads board)
+
+The PMS Owner Leads pages read the board **Owner Leads** in the workspace **Business Development & Procurement** (both found by name, capitals and spaces ignored; a Super Private workspace is never used). The code is in `api/_pms-owner-leads.js` (server), `src/services/pmsOwnerLeads.js` (TMS app) and `api/_lib/ownerLeadStatus.js` (the mapping, shared).
+
+| Column | Lead status in the PMS |
+|---|---|
+| New | `new`: not started in the PMS yet (no `pmsLink`) |
+| In Progress | `progress` |
+| Signed | `signed` |
+| Live | `live` |
+| Cancelled | `cancelled` (the PMS shows "Not proceeding") |
+
+A card in any other column comes back with `status: null`. **Start listing** in the PMS makes NL-000n, calls `link` with `pmsLink { type: 'newOwnerListing', id: 'NL-000n' }` (Procurement may link a card of this board whatever its department) and then `moveOwnerLead` to `progress`. The PMS moves the card with `moveOwnerLead` when the agreement is signed, at Mark as Live, and at Not proceeding / reopen; each move writes the activity line "Moved from the PMS by <name>". The PMS also polls `ownerLeads` every 30 to 60 seconds (as a backup, and for cards not linked yet).
+
+**TMS -> PMS.** A card linked to a listing (`newOwnerListing:NL-000n`) that is moved to another column here (drag and drop, the status list in the task window, Move to board within the same board, deleting a column), or renamed, is written to the PMS listing **first**, as the signed-in person (`src/services/pmsOwnerLeads.js`), like Maintenance tickets. The listing gets `status`, `signedAt` / `liveAt` (set on the way forward, removed on the way back, for the aging counter), `prevStatus` and `cancelledAt` / `cancelledBy` / `cancelledByUid` / `cancelReason` ("Moved to Cancelled in the task system") for Cancelled, `tmsColumn`, `tmsTitle`, and a history line. The PMS rules decide (Directors and Procurement move a listing, only Directors reopen a Cancelled one); if the PMS refuses, the card is not changed. A linked card can't go back to New, can't move to another board and can't be deleted (move it to Cancelled). The description, assignees, dates and checklist stay in the TMS only. The pure mapping is `leadChanges` in `api/_lib/ownerLeadStatus.js`. Renaming the board, the workspace or a column breaks the match: keep the names above.
 
 ## Environment variables (Vercel > Project > Settings > Environment Variables)
 
