@@ -208,6 +208,15 @@ async function update(me, taskId, data) {
     }
   }
 
+  // description: the PMS listing's Description, sent when it changes there (Owner Leads, 11 Nov 2026)
+  if (typeof data.description === 'string') {
+    const desc = text(data.description, 5000)
+    if (desc !== (t.description || '').trim()) {
+      changes.description = desc
+      logs.push(['updated', 'description (from the PMS)'])
+    }
+  }
+
   if (typeof data.completed === 'boolean' && data.completed !== !!t.completedAt) {
     const columns = await boardColumns(db, t.boardId || BOARD_ID)
     const open = columns.filter((c) => !c.archived)

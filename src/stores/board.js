@@ -278,7 +278,7 @@ export const useBoardStore = defineStore('board', () => {
     return !!w && !w.archived && w.name === MAINTENANCE_WORKSPACE
   }
   // ----- PMS Owner Leads (docs/PMS_LINK.md, "Owner Leads") -----
-  // A card of the Owner Leads board linked to a PMS listing (NL-0001): its column (the lead status) and title are written
+  // A card of the Owner Leads board linked to a PMS listing (NL-0001): its column (the lead status), title and description are written
   // to the PMS first (pushLeadToPms) and only changed here when the PMS accepts.
   function isOwnerLeadsBoard(id) {
     const b = id === boardId.value ? boardDoc.value : wsStore.boardById(id)
@@ -353,8 +353,9 @@ export const useBoardStore = defineStore('board', () => {
         title: 'title' in changes ? changes.title : null, description: 'description' in changes ? changes.description : null,
       }, auth.profile)
     }
-    if (isLeadCard(task) && (moving || 'title' in changes)) {
-      await pushLeadToPms(task, { column: moving ? column : null, title: 'title' in changes ? changes.title : null }, auth.profile)
+    if (isLeadCard(task) && (moving || 'title' in changes || 'description' in changes)) {
+      await pushLeadToPms(task, { column: moving ? column : null, title: 'title' in changes ? changes.title : null,
+        description: 'description' in changes ? (changes.description ?? '') : null }, auth.profile)
     }
     if (column) { // moved from the status dropdown (a column of the task's own board)
       await moveTask(task, column, endPosition(column.id), auth.profile)

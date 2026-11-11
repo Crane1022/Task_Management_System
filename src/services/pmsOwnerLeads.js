@@ -1,7 +1,7 @@
 // Owner Leads: the TMS side of the PMS Owner Leads link (docs/PMS_LINK.md, "Owner Leads").
 //
 // TMS -> PMS: a card of the Owner Leads board that is linked to a PMS listing (task.pmsLink = { type: 'newOwnerListing',
-// id: 'NL-0001' }) and is moved to another column, or renamed, is written to the PMS listing FIRST, as the signed-in
+// id: 'NL-0001' }) and is moved to another column, renamed, or has its description edited, is written to the PMS listing FIRST, as the signed-in
 // person (their PMS sign-in, kept by this browser since login). The PMS rules decide who may (Directors and Procurement
 // move a listing; only Directors reopen a Not proceeding one). If the PMS refuses, the card is not changed either.
 // Cards not linked yet (status New, waiting for Start listing in the PMS) are TMS only: the PMS reads them itself.
@@ -21,8 +21,9 @@ function plainError(e, id) {
   return e instanceof Error ? e : new Error(String(e))
 }
 
-// column/columns: the card's new column (null = not moving); title: the card's new title (null = unchanged)
-export async function pushLeadToPms(task, { column = null, title = null } = {}, profile) {
+// column/columns: the card's new column (null = not moving); title: the card's new title (null = unchanged);
+// description: the card's new description (null = unchanged), written to the listing's Description
+export async function pushLeadToPms(task, { column = null, title = null, description = null } = {}, profile) {
   if (!isLinkedLead(task)) return
   const id = task.pmsLink.id
   if (!pmsAuth.currentUser) throw new Error('Your PMS sign-in has ended. Sign out and sign in again.')
@@ -39,6 +40,10 @@ export async function pushLeadToPms(task, { column = null, title = null } = {}, 
   const lines = line ? [line] : []
   const t = title?.trim().slice(0, 200)
   if (t && t !== cur.tmsTitle) { changes.tmsTitle = t; lines.push(`Renamed the card in the task system to "${t}".`) }
+  if (description !== null) {
+    const desc = String(description).trim().slice(0, 5000)
+    if (desc !== String(cur.description || '').trim()) { changes.description = desc; lines.push('Description changed in the task system.') }
+  }
   if (!Object.keys(changes).length) return
 
   const entries = lines.map((text) => ({ at: nowIso(), by: me.by, text }))
