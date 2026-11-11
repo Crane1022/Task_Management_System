@@ -387,7 +387,19 @@ export const useBoardStore = defineStore('board', () => {
   }, 'Could not delete task')
 
   // Called after a drop. `ids` is the final card order of the target column as shown on screen.
-  const dropTask = ({ taskId, columnId, ids }) => run(async () => {
+  // Cards being saved after a drag: { [taskId]: 'saving' | 'saved' }. TaskCard shows "Syncing" then a tick.
+  const syncState = reactive({})
+  async function dropTask(args) {
+    const id = args.taskId
+    syncState[id] = 'saving'
+    const ok = await dropTaskNow(args)
+    if (ok) {
+      syncState[id] = 'saved'
+      setTimeout(() => { if (syncState[id] === 'saved') delete syncState[id] }, 1400)
+    } else delete syncState[id]
+  }
+
+  const dropTaskNow = ({ taskId, columnId, ids }) => run(async () => {
     const task = tasks.value.find((t) => t.id === taskId)
     const target = columns.value.find((c) => c.id === columnId) // a column of THIS board
     if (!task || !target) { resetTasks(); return } // e.g. dropped into the "other statuses" column
@@ -410,6 +422,7 @@ export const useBoardStore = defineStore('board', () => {
     await moveTask(task, column, position, auth.profile)
     if (task.columnId !== column.id) notif.taskMoved(task, column.name, column.isDone)
     if (column.isDone && task.columnId !== column.id) companion.react('completed') // a card dropped into a completed column
+    return true
   }, 'Could not move task', resetTasks)
 
   // ----- columns -----
@@ -464,7 +477,7 @@ export const useBoardStore = defineStore('board', () => {
     columns, activeColumns, archivedColumns, tasks, ownTasks, filtered, users, loading, error, filters, hasFilters,
     unplacedTasks, destinations,
     start, stop, clearFilters, tasksIn, columnsFor, loadColumnsFor, columnNameOf, boardLabelOf, roleOfBoard, ticketBoardFor,
-    addTask, saveTask, moveToBoard, removeTask, dropTask, addColumn, rename, updateColumnSettings, archiveColumn, moveColumn,
+    addTask, saveTask, moveToBoard, removeTask, dropTask, syncState, addColumn, rename, updateColumnSettings, archiveColumn, moveColumn,
     taskCount, ownTaskCount, removeColumn, seedColumns,
   }
 })

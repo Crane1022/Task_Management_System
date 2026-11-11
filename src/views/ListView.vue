@@ -55,7 +55,12 @@ const names = (t) => (t.assignedTo ?? []).map((id) => displayOf(board.users[id])
       </select>
     </div>
 
-    <div v-if="board.loading" class="space-y-2 px-4 pt-2"><div v-for="n in 6" :key="n" class="skeleton h-12" /></div>
+    <div v-if="board.loading" class="space-y-1.5 px-4 pt-2" aria-label="Loading tasks" role="status">
+      <div v-for="n in 6" :key="n" class="flex h-12 items-center gap-3 rounded-xl border border-line bg-surface px-3" :style="{ opacity: 1 - n * 0.1 }">
+        <span class="skeleton h-3.5 rounded-md" :style="{ width: ['38%', '30%', '44%', '26%', '35%', '40%'][n - 1] }" />
+        <span class="skeleton ml-auto h-4 w-14 rounded-md" /><span class="skeleton h-4 w-20 rounded-md" /><span class="skeleton h-6 w-6 rounded-full" />
+      </div>
+    </div>
     <div v-else-if="board.error" class="m-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200" role="alert">
       <p class="font-bold">The list could not load.</p><p class="mt-1">{{ board.error }}</p><button class="btn-ghost mt-3" @click="board.start()">Try again</button>
     </div>

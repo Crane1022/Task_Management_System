@@ -16,6 +16,7 @@ import BoardSettingsDialog from '@/components/BoardSettingsDialog.vue'
 import TaskModalHost from '@/components/TaskModalHost.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DeleteColumnDialog from '@/components/DeleteColumnDialog.vue'
+import TaskCardSkeleton from '@/components/TaskCardSkeleton.vue'
 
 const props = defineProps({ mine: Boolean }) // true on /my-tasks
 const board = useBoardStore()
@@ -112,7 +113,10 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
     </div>
 
     <div v-if="board.loading" class="flex flex-1 gap-4 overflow-hidden px-4 pt-2">
-      <div v-for="n in 4" :key="n" class="w-72 shrink-0 space-y-3"><div class="skeleton h-8" /><div class="skeleton h-28" /><div class="skeleton h-24" /></div>
+      <div v-for="(count, c) in [3, 2, 4, 1]" :key="c" class="w-72 shrink-0 rounded-2xl border border-line bg-surface p-3" :style="{ opacity: 1 - c * 0.15 }">
+        <div class="mb-3 flex items-center justify-between"><span class="skeleton h-4 w-24 rounded-md" /><span class="skeleton h-4 w-6 rounded-md" /></div>
+        <div class="space-y-2"><TaskCardSkeleton v-for="n in count" :key="n" :n="c + n" /></div>
+      </div>
     </div>
 
     <div v-else-if="board.denied" class="grid flex-1 place-items-center p-6 text-center">

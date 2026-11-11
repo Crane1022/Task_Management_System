@@ -12,6 +12,7 @@ import { activeQuery, insertMention, resolveMentions, splitMentions } from '@/ut
 import { canSeeTask } from '@/utils/notifications'
 import UserAvatar from './UserAvatar.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import PawLoader from '@/components/PawLoader.vue'
 
 // A task's discussion. Comments are stored with the task (tasks/{id}/comments), so only people who can read the task can read them.
 const props = defineProps({ taskId: String, users: { type: Object, default: () => ({}) }, canComment: Boolean, canModerate: Boolean, task: Object })
@@ -102,7 +103,7 @@ async function remove() {
 <template>
   <section aria-label="Comments">
     <span class="label flex items-center gap-1"><MessageSquare class="h-3.5 w-3.5" />Comments <span v-if="comments.length" class="text-muted">({{ comments.length }})</span></span>
-    <p v-if="loading" class="text-xs text-muted">Loading comments…</p>
+    <PawLoader v-if="loading" text="Loading comments…" small />
     <p v-else-if="failed" class="text-xs font-semibold text-red-600" role="alert">The comments could not be loaded.</p>
 
     <ul v-if="comments.length" class="space-y-3">

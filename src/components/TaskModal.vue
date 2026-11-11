@@ -1,11 +1,12 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { X, Plus, Trash2 } from 'lucide-vue-next'
+import { X, Plus, Trash2, Bold, List, ListOrdered } from 'lucide-vue-next'
 import { PRIORITIES, DEPARTMENTS, displayOf } from '@/utils/constants'
 import { toInput, fromInput } from '@/utils/dates'
 import ConfirmDialog from './ConfirmDialog.vue'
 import TaskAttachments from './TaskAttachments.vue'
-import LinkifiedText from './LinkifiedText.vue'
+import RichText from './RichText.vue'
+import { toggleBold, toggleList, continueList } from '@/utils/richText'
 import DescriptionLinks from './DescriptionLinks.vue'
 import TaskComments from './TaskComments.vue'
 import TaskActivity from './TaskActivity.vue'
@@ -61,6 +62,24 @@ function startEditDesc() {
   if (props.readonly) return
   editingDesc.value = true
   nextTick(() => descBox.value?.focus())
+}
+// Point form and bold (utils/richText.js): the toolbar buttons and keys change the text and keep the selection
+function editDesc(fn) {
+  const el = descBox.value
+  if (!el) return
+  const r = fn(form.value.description, el.selectionStart, el.selectionEnd)
+  form.value.description = r.value
+  nextTick(() => { el.focus(); el.setSelectionRange(r.start, r.end) })
+}
+const boldDesc = () => editDesc(toggleBold)
+const listDesc = (kind) => editDesc((v, s, e) => toggleList(v, s, e, kind))
+function onDescKey(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); boldDesc(); return }
+  // Enter on a point starts the next point; Enter on an empty point ends the list
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.selectionStart === e.target.selectionEnd) {
+    const r = continueList(form.value.description, e.target.selectionStart)
+    if (r) { e.preventDefault(); form.value.description = r.value; nextTick(() => e.target.setSelectionRange(r.start, r.end)) }
+  }
 }
 const error = ref('')
 
@@ -173,10 +192,19 @@ function submit() {
         <PmsTicketFields v-if="ticketBoard" v-model="ticket" :board="ticketBoard" :profile="profile" part="top" />
         <div>
           <label class="label" for="t-desc">{{ ticketBoard ? 'What happened' : 'Description' }}<span v-if="ticketBoard" class="text-red-600"> *</span></label>
-          <!-- with text in it, the description is shown with its links blue, underlined and clickable; click the text to edit it -->
+          <!-- with text in it, the description is shown with its points, bold words and clickable links; click it to edit it -->
           <div v-if="form.description.trim() && !editingDesc" class="input min-h-[4.5rem] text-sm" :class="readonly ? 'cursor-default' : 'cursor-text'" :tabindex="readonly ? -1 : 0" :role="readonly ? undefined : 'button'" :aria-label="readonly ? undefined : 'Edit the description'"
-            @click="startEditDesc" @keydown.enter.self.prevent="startEditDesc"><LinkifiedText :text="form.description" /></div>
-          <textarea v-else-if="!readonly" id="t-desc" ref="descBox" v-model="form.description" rows="3" class="input" :placeholder="ticketBoard ? 'Describe the issue, when it started and what you have tried' : null" @blur="editingDesc = false" />
+            @click="startEditDesc" @keydown.enter.self.prevent="startEditDesc"><RichText :text="form.description" /></div>
+          <div v-else-if="!readonly">
+            <!-- the buttons keep the focus in the text (mousedown.prevent), so editing goes on -->
+            <div class="mb-1 flex items-center gap-1" role="toolbar" aria-label="Format the description">
+              <button type="button" class="rounded-md p-1.5 text-muted hover:bg-accent-soft hover:text-accent" title="Bold (Ctrl+B)" aria-label="Bold" @mousedown.prevent @click="boldDesc"><Bold class="h-4 w-4" /></button>
+              <button type="button" class="rounded-md p-1.5 text-muted hover:bg-accent-soft hover:text-accent" title="Bullet points" aria-label="Bullet points" @mousedown.prevent @click="listDesc('bullet')"><List class="h-4 w-4" /></button>
+              <button type="button" class="rounded-md p-1.5 text-muted hover:bg-accent-soft hover:text-accent" title="Numbered points" aria-label="Numbered points" @mousedown.prevent @click="listDesc('number')"><ListOrdered class="h-4 w-4" /></button>
+              <span class="ml-auto hidden text-[11px] text-muted sm:inline">**bold** · - point · 1. numbered</span>
+            </div>
+            <textarea id="t-desc" ref="descBox" v-model="form.description" rows="5" class="input" :placeholder="ticketBoard ? 'Describe the issue, when it started and what you have tried' : null" @keydown="onDescKey" @blur="editingDesc = false" />
+          </div>
           <p v-else class="text-sm text-muted">No description.</p>
           <DescriptionLinks v-if="t && !readonly" :task-id="t.id" :text="form.description" :attachments="(liveTask ?? t).attachments ?? []" />
         </div>

@@ -1,9 +1,10 @@
 <script setup>
 import { computed } from 'vue'
-import { Paperclip, MessageSquare, CheckSquare, CalendarDays } from 'lucide-vue-next'
+import { Paperclip, MessageSquare, CheckSquare, CalendarDays, Check } from 'lucide-vue-next'
+import { useBoardStore } from '@/stores/board'
 import { priorityOf, deptName } from '@/utils/constants'
 import UserAvatar from './UserAvatar.vue'
-import LinkifiedText from './LinkifiedText.vue'
+import RichText from './RichText.vue'
 import { formatDate, dueState } from '@/utils/dates'
 
 const props = defineProps({ task: Object, users: Object, boardLabel: { type: String, default: '' } })
@@ -14,18 +15,21 @@ const subs = computed(() => props.task.subtasks ?? [])
 const subsDone = computed(() => subs.value.filter((s) => s.done).length)
 const people = computed(() => (props.task.assignedTo ?? []).map((id) => props.users[id]).filter(Boolean))
 const initials = (u) => u.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+// 'saving' while a dragged card is being written to Firestore (and the PMS for a ticket), then 'saved' for a moment
+const board = useBoardStore()
+const sync = computed(() => board.syncState?.[props.task.id])
 const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(0), 0) % 360} 55% 45%)`
 </script>
 
 <template>
-  <article class="task-card cursor-pointer rounded-xl border border-line bg-surface p-3 shadow-card hover:border-highlight">
+  <article class="task-card cursor-pointer rounded-xl border border-line bg-surface p-3 shadow-card hover:border-highlight" :class="sync === 'saving' && 'is-syncing'" :aria-busy="sync === 'saving' || null">
     <div v-if="task.labels?.length" class="mb-2 flex flex-wrap gap-1">
       <span v-for="l in task.labels" :key="l" class="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" :style="{ background: labelColor(l) }">{{ l }}</span>
     </div>
 
     <p v-if="boardLabel" class="mb-1 truncate text-[10px] font-bold uppercase tracking-wide text-muted" :title="boardLabel">{{ boardLabel }}</p>
     <h3 class="text-sm font-bold leading-snug">{{ task.title }}</h3>
-    <p v-if="task.description" class="mt-1 line-clamp-2 text-xs text-muted"><LinkifiedText :text="task.description" /></p>
+    <p v-if="task.description" class="mt-1 line-clamp-2 text-xs text-muted"><RichText :text="task.description" compact /></p>
 
     <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
       <span class="rounded-md px-1.5 py-0.5" :class="priority.cls">{{ priority.name }}</span>
@@ -41,6 +45,9 @@ const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(
 
     <div class="mt-3 flex items-center justify-between text-xs text-muted">
       <div class="flex items-center gap-3">
+        <span v-if="sync" class="flex items-center gap-1.5 font-semibold" :class="sync === 'saved' ? 'text-accent' : 'text-highlight'" role="status">
+          <span v-if="sync === 'saving'" class="sync-dot" /><Check v-else class="sync-tick h-3.5 w-3.5" />{{ sync === 'saving' ? 'Syncing' : 'Saved' }}
+        </span>
         <span v-if="task.dueDate" class="flex items-center gap-1 font-semibold"
           :class="{ 'text-red-600': due === 'overdue', 'text-amber-600': due === 'today' }">
           <CalendarDays class="h-3.5 w-3.5" />{{ formatDate(task.dueDate) }}<template v-if="due === 'overdue'"> · Overdue</template>

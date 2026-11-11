@@ -10,6 +10,7 @@ import { displayOf } from '@/utils/constants'
 import { activeQuery, insertMention, resolveMentions, splitMentions } from '@/utils/mentions'
 import { EMOJI_GROUPS, BUILT_IN_STICKERS, MAX_MY_STICKERS, insertAt, stickerUrl } from '@/utils/stickers'
 import UserAvatar from './UserAvatar.vue'
+import PawLoader from '@/components/PawLoader.vue'
 
 // One conversation of a Super Private workspace (the Everyone channel, a group or a DM): @tags, emoji, stickers and your own saved stickers.
 // Only its people can read or write (firestore.rules). `chat` = the group/DM document, or null for the Everyone channel.
@@ -114,7 +115,7 @@ const broken = ref(new Set())
   <section class="flex min-h-0 flex-1 flex-col" aria-label="Chat">
     <p class="flex items-center gap-1.5 border-b border-line px-4 py-2 text-xs font-bold text-muted"><Lock class="h-3.5 w-3.5" />{{ chat ? (chat.type === 'dm' ? 'Direct message. Only the two of you can read it.' : 'Group chat. Only the people in this group can read it.') : 'Everyone channel. All members of this Super Private workspace can read it.' }}</p>
     <div ref="list" class="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-      <p v-if="loading" class="text-sm text-muted">Loading…</p>
+      <PawLoader v-if="loading" text="Loading messages…" />
       <p v-else-if="failed" class="text-sm font-semibold text-red-600" role="alert">The chat could not be loaded.</p>
       <p v-else-if="!messages.length" class="py-8 text-center text-sm text-muted">No messages yet. Say hello.</p>
       <div v-for="m in messages" :key="m.id" class="group flex gap-2.5" :class="isMine(m) && 'flex-row-reverse'">

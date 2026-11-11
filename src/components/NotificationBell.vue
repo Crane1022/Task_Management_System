@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import { formatDateTime } from '@/utils/dates'
 import PushToggle from '@/components/PushToggle.vue'
+import PawLoader from '@/components/PawLoader.vue'
 
 // The bell in the top bar: unread count, the list, mark as read, and a click that opens the task or workspace.
 const auth = useAuthStore()
@@ -45,7 +46,7 @@ async function go(n) {
           <button v-if="store.items.length" class="btn-ghost px-2 py-1 text-xs" title="Remove all" @click="store.clear()"><Trash2 class="h-3.5 w-3.5" /><span class="sr-only">Remove all notifications</span></button>
         </div>
         <p v-if="store.failed" class="px-3 py-6 text-center text-sm font-semibold text-red-600" role="alert">Notifications could not be loaded.</p>
-        <p v-else-if="store.loading" class="px-3 py-6 text-center text-sm text-muted">Loading…</p>
+        <PawLoader v-else-if="store.loading" text="Loading notifications…" />
         <p v-else-if="!store.items.length" class="px-3 py-8 text-center text-sm text-muted">You are all caught up.</p>
         <ul v-else class="max-h-[26rem] divide-y divide-line overflow-auto">
           <li v-for="n in store.items" :key="n.id" class="group relative">

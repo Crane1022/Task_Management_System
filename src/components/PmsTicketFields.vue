@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { X, Link2, Ticket } from 'lucide-vue-next'
 import { ticketChoices, checkDriveLink } from '@/services/pmsIssues'
 import { tagLabel } from '@/utils/issueStatus'
+import PawLoader from '@/components/PawLoader.vue'
 
 // The PMS "Raise a ticket" fields, in the new-task form of a Maintenance board (the board is the property).
 // Always a Customer ticket (a guest or tenant's problem at a unit): only those come to the Maintenance workspace;
@@ -72,7 +73,7 @@ function addLink() {
     <p class="text-[11px] text-muted">
       This task is raised as a ticket on the PMS Issues page<template v-if="c?.property?.name"> for {{ c.property.name }}</template>. Its status, title and description stay the same in both places.
     </p>
-    <p v-if="loading" class="text-xs text-muted">Loading units and roles from the PMS…</p>
+    <PawLoader v-if="loading" text="Loading units and roles from the PMS…" small />
     <p v-else-if="loadError" class="text-xs font-semibold text-red-600" role="alert">{{ loadError }}</p>
     <template v-else-if="c">
       <p class="rounded-lg bg-surface px-3 py-2 text-xs"><b>Customer ticket</b> · a guest or tenant's problem at a unit. In-house matters are raised in the PMS.</p>

@@ -16,6 +16,8 @@ import CreateBoardDialog from '@/components/CreateBoardDialog.vue'
 import MemberManager from '@/components/MemberManager.vue'
 import WorkspaceChatHub from '@/components/WorkspaceChatHub.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import PullIndicator from '@/components/PullIndicator.vue'
+import { usePullToRefresh } from '@/composables/usePullToRefresh'
 
 // Workspace overview (Boards tab), Members tab and Settings tab. Which tab is decided by the route.
 const route = useRoute()
@@ -41,6 +43,9 @@ async function loadPreviews(force = false) {
 watch(() => boards.value.map((b) => b.id).join(), () => loadPreviews(), { immediate: true })
 const refreshing = ref(false)
 async function refresh() { refreshing.value = true; await loadPreviews(true); refreshing.value = false }
+// phones: pull the page down from the top to do the same as Refresh
+const scroller = ref(null)
+const { pull, busy: pulling, threshold } = usePullToRefresh(scroller, refresh)
 
 // ----- search, sort, filter -----
 const search = ref('')
@@ -101,7 +106,8 @@ async function adopt() {
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto">
+  <div ref="scroller" class="h-full overflow-y-auto">
+    <PullIndicator :pull="pull" :busy="pulling" :threshold="threshold" />
     <div v-if="store.loading" class="mx-auto max-w-6xl space-y-3 px-4 pt-6"><div class="skeleton h-20" /><div class="skeleton h-40" /></div>
 
     <div v-else-if="!ws" class="grid h-full place-items-center p-6 text-center">
