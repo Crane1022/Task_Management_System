@@ -162,6 +162,32 @@ export async function pushToPms(task, { column = null, columns = [], title = nul
   if (newStatus === 'done') notifyTagged({ id, ...cur }, `${id} completed`, `${me.by} marked "${tTitle}" completed (task system).`, profile)
 }
 
+// ----- TMS -> PMS: a ticket card deleted here -----
+// Deletes the ticket in the PMS the same way its Delete ticket does: marked deleted with the reason, never removed.
+// PMS Directors only (the PMS rules refuse anyone else). Already deleted: nothing to do.
+export async function deleteInPms(task, reason, profile) {
+  if (!isIssueTask(task)) return
+  const id = task.pmsLink.id
+  signedIn()
+  const why = String(reason ?? '').trim().slice(0, 300)
+  if (!why) throw new Error('Give a reason for deleting the ticket')
+  if (profile?.pmsRole !== 'director') throw new Error(`Only Directors can delete tickets, and deleting this card deletes ${id} in the PMS`)
+  const ref = doc(pmsDb, 'issues', id)
+  const me = who(profile)
+  try {
+    const snap = await getDoc(ref)
+    if (!snap.exists() || snap.data().status === 'deleted') return
+    await updateDoc(ref, {
+      status: 'deleted', deletedAt: serverTimestamp(), deletedBy: me.by, deletedByUid: me.uid, deleteReason: why,
+      audit: arrayUnion({ at: nowIso(), by: me.by, role: me.role, text: `deleted the ticket from the task system · reason: "${why}"` }),
+      updatedAt: serverTimestamp(),
+    })
+  } catch (e) {
+    if (e?.code === 'permission-denied') throw new Error(`The PMS did not allow deleting ${id}: only Directors can delete tickets`)
+    throw plainError(e, id)
+  }
+}
+
 // ----- a new ticket from a Maintenance board -----
 // ticket = { type: 'customer' | 'inhouse', title, body, unit: a unit from ticketChoices | null (either type), unitText (typed
 // code when units can't be read), tags: [tag], links: [{ name, url }] }; choices = ticketChoices(board).

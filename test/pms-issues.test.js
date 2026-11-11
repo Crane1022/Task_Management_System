@@ -78,9 +78,10 @@ let db
 beforeEach(() => {
   db = fakeDb()
   ISSUES = {
-    'IS-0001': { title: 'Aircond leaking', body: 'Master bedroom', status: 'open', tags: ['Operations'], property: 'Vista Tower', propertyId: 'p1', unit: 'VT-12A', raisedByUid: 'mktUid' },
-    'IS-0002': { title: 'Laptop broken', body: 'In the lobby', status: 'open', tags: ['Marketing'], property: 'vista tower', unit: '', raisedByUid: 'mktUid' },
-    'IS-0003': { title: 'Door lock', body: '', status: 'open', tags: ['Procurement', 'Operations'], property: '', unit: '', raisedByUid: 'opsUid' },
+    'IS-0001': { type: 'customer', title: 'Aircond leaking', body: 'Master bedroom', status: 'open', tags: ['Operations'], property: 'Vista Tower', propertyId: 'p1', unit: 'VT-12A', raisedByUid: 'mktUid' },
+    'IS-0002': { type: 'customer', title: 'Lobby door', body: 'In the lobby', status: 'open', tags: ['Marketing'], property: 'vista tower', unit: '', raisedByUid: 'mktUid' },
+    'IS-0004': { type: 'inhouse', title: 'Laptop broken', body: 'Office', status: 'open', tags: ['Operations'], property: '', unit: '', raisedByUid: 'opsUid' },
+    'IS-0003': { type: 'customer', title: 'Door lock', body: '', status: 'open', tags: ['Procurement', 'Operations'], property: '', unit: '', raisedByUid: 'opsUid' },
   }
   db.store['workspaces/wsM'] = { name: 'Maintenance', archived: false, members: {}, memberIds: [] }
   db.store['boards/bVista'] = { workspaceId: 'wsM', name: 'Vista Tower', archived: false }
@@ -139,7 +140,27 @@ test('a new Operations ticket becomes a task on its property board, in TODO', as
   assert.equal(db.store['boards/bVista'].pmsPropertyId, 'p1') // remembered for next time
 })
 
-test('every ticket gets a task, whatever is tagged (an In-house one too), on its property board', async () => {
+test('In-house tickets stay in the PMS; a ticket changed to In-house loses its task, and gets it back as Customer', async () => {
+  let r = await sync('tok-ops', 'IS-0004')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(r.body.taskId, null)
+  assert.match(r.body.skipped, /In-house/)
+  assert.equal(task('IS-0004'), undefined)
+  await sync('tok-ops', 'IS-0001')
+  assert.ok(task('IS-0001'))
+  ISSUES['IS-0001'].type = 'inhouse'
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.body.deleted, true)
+  assert.equal(task('IS-0001'), undefined)
+  ISSUES['IS-0001'].type = 'customer'
+  await sync('tok-ops', 'IS-0001')
+  assert.equal(task('IS-0001').boardId, 'bVista')
+  // an older ticket with no type counts as Customer when it has a unit
+  delete ISSUES['IS-0001'].type
+  assert.equal((await sync('tok-ops', 'IS-0001')).body.taskId, 'issue-IS-0001')
+})
+
+test('every Customer ticket gets a task, whatever is tagged, on its property board', async () => {
   const r = await sync('tok-mkt', 'IS-0002') // tagged Marketing only, property name in other capitals
   assert.equal(r.code, 200, JSON.stringify(r.body))
   assert.equal(r.body.created, true)

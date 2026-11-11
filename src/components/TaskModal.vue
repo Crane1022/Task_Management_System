@@ -11,6 +11,7 @@ import TaskComments from './TaskComments.vue'
 import TaskActivity from './TaskActivity.vue'
 import TaskMove from './TaskMove.vue'
 import PmsTicketFields from './PmsTicketFields.vue'
+import { isIssueTask } from '@/utils/issueStatus'
 
 const props = defineProps({
   task: Object, // null = creating
@@ -50,6 +51,10 @@ const form = ref({
 })
 const newSub = ref('')
 const confirmDelete = ref(false)
+// A PMS ticket's card: deleting it deletes the ticket in the PMS too (marked deleted with a reason), which only
+// PMS Directors may do, so only they see Delete on it
+const ticketCard = computed(() => !!t && isIssueTask(t))
+const mayDelete = computed(() => props.canDelete && (!ticketCard.value || props.profile?.pmsRole === 'director'))
 const editingDesc = ref(false)
 const descBox = ref(null)
 function startEditDesc() {
@@ -78,8 +83,7 @@ const ticket = ref({ type: '', unit: null, unitText: '', tags: [], links: [], ch
 function ticketError() {
   const k = ticket.value
   if (!k.ready) return 'The PMS ticket details have not loaded. Close the form and try again.'
-  if (!k.type) return 'Choose Customer or In-house.'
-  if (k.type === 'customer' && !k.unit && !k.unitText.trim()) return 'Choose the unit for a customer ticket.'
+  if (!k.unit && !k.unitText.trim()) return 'Choose the unit.'
   if (!form.value.description.trim()) return 'Describe what happened.'
   if (!k.tags.length) return 'Tag at least one role to handle it.'
   return ''
@@ -232,7 +236,7 @@ function submit() {
       </fieldset>
 
       <footer class="flex items-center justify-between border-t border-line px-5 py-3">
-        <button v-if="t && canDelete" type="button" class="btn-ghost text-red-600" @click="confirmDelete = true"><Trash2 class="h-4 w-4" />Delete</button>
+        <button v-if="t && mayDelete" type="button" class="btn-ghost text-red-600" @click="confirmDelete = true"><Trash2 class="h-4 w-4" />Delete</button>
         <span v-else />
         <div class="flex gap-2">
           <button type="button" class="btn-ghost" @click="emit('close')">Cancel</button>
@@ -241,7 +245,10 @@ function submit() {
       </footer>
     </form>
 
-    <ConfirmDialog v-if="confirmDelete" title="Delete this task?" message="This permanently removes the task for everyone. This cannot be undone."
+    <ConfirmDialog v-if="confirmDelete && ticketCard" :title="`Delete ticket ${t.pmsLink.id}?`"
+      :message="`This removes the card here and deletes ${t.pmsLink.id} in the PMS too. The PMS keeps the ticket, marked deleted with your reason.`"
+      reason-label="Reason for deleting" @cancel="confirmDelete = false" @confirm="(reason) => emit('delete', reason)" />
+    <ConfirmDialog v-else-if="confirmDelete" title="Delete this task?" message="This permanently removes the task for everyone. This cannot be undone."
       @cancel="confirmDelete = false" @confirm="emit('delete')" />
   </div>
 </template>

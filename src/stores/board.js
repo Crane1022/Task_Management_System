@@ -9,7 +9,7 @@ import { subscribeColumns, fetchColumns, createColumn, renameColumn, deleteColum
 import { subscribeBoardTasks, createTask, updateTask, moveTask, moveTaskToBoard, deleteTask, moveAllTasks } from '@/services/taskService'
 import { subscribeUsers } from '@/services/userService'
 import { subscribeBoardDoc, subscribeWorkspace } from '@/services/workspaceService'
-import { pushToPms, raiseInPms, syncIssue, clearDeletedTickets } from '@/services/pmsIssues'
+import { pushToPms, raiseInPms, syncIssue, clearDeletedTickets, deleteInPms } from '@/services/pmsIssues'
 import { isIssueTask, MAINTENANCE_WORKSPACE } from '@/utils/issueStatus'
 import { startOfToday } from '@/utils/dates'
 import { STEP, byPosition, positionBetween, mergeColumnOrder } from '@/utils/ordering'
@@ -371,9 +371,19 @@ export const useBoardStore = defineStore('board', () => {
     return true
   }, 'Could not move the task')
 
-  const removeTask = (task) => run(async () => {
+  // A PMS ticket's card: the ticket is deleted in the PMS first (Directors, with a reason; it may refuse), then the server
+  // removes the card with its activity records. Resolves true when deleted (the task window then closes).
+  const removeTask = (task, reason = '') => run(async () => {
+    if (isIssueTask(task)) {
+      const id = task.pmsLink.id
+      await deleteInPms(task, reason, auth.profile)
+      try { await syncIssue(id) } catch { await deleteTask(task.id) } // the server could not be reached: remove the card here
+      ui.toast(`Ticket ${id} deleted, here and in the PMS`)
+      return true
+    }
     await deleteTask(task.id)
-    ui.toast(isIssueTask(task) ? `Task deleted. The PMS ticket ${task.pmsLink.id} stays; its next change there brings the card back` : 'Task deleted')
+    ui.toast('Task deleted')
+    return true
   }, 'Could not delete task')
 
   // Called after a drop. `ids` is the final card order of the target column as shown on screen.

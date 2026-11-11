@@ -5,7 +5,9 @@
 // It sends only the ticket number: the ticket itself is read here from the PMS with the CALLER's token, so the PMS rules
 // decide whether they may see it, and nothing the caller sends can change what is copied.
 //
-//   - No task yet and the ticket is open or in progress (any ticket, In-house or Customer, whatever roles are tagged):
+//   - Only CUSTOMER tickets come to the TMS. In-house tickets (office, staff or company matters) stay in the PMS, and a
+//       ticket changed to In-house has its task removed (it comes back if changed to Customer again).
+//   - No task yet and the Customer ticket is open or in progress (whatever roles are tagged):
 //       a task is made on the board of the ticket's property in the Maintenance workspace (found by PMS property ID,
 //       then by name). Boards are never made here: a ticket with no property, or a property with no board, is refused
 //       with the reason (the PMS shows it), and goes in on its next change once that is fixed.
@@ -43,6 +45,8 @@ export function issueFrom(fields) {
   const str = (v, max) => text(typeof v === 'string' ? v : '', max)
   return {
     title: str(o.title, 200), body: str(o.body, 5000), status: str(o.status, 20),
+    // as typeOf() on the PMS Issues page: older tickets without a type are Customer when they have a unit
+    type: o.type === 'customer' || o.type === 'inhouse' ? o.type : (o.unit ? 'customer' : 'inhouse'),
     tags: Array.isArray(o.tags) ? o.tags.filter((t) => typeof t === 'string') : [],
     property: str(o.property, 80), propertyId: str(o.propertyId, 100), unit: str(o.unit, 40),
     raisedBy: str(o.raisedBy, 80), deleteReason: str(o.deleteReason, 300),
@@ -95,6 +99,7 @@ export async function maintenanceBoards() {
 }
 
 async function createFor(db, FieldValue, me, id, issue, hintId) {
+  if (issue.type !== 'customer') return { ok: true, taskId: null, skipped: 'In-house tickets stay in the PMS' }
   const departmentId = issueDepartment(issue.tags) // Procurement when tagged first, otherwise Operations
   if (!['open', 'progress'].includes(issue.status)) return { ok: true, taskId: null, skipped: 'The ticket is not open or in progress' }
 
@@ -141,6 +146,7 @@ async function deleteFor(db, id, snap) {
 
 async function updateFor(db, FieldValue, me, id, issue, snap) {
   if (issue.status === 'deleted') return deleteFor(db, id, snap)
+  if (issue.type !== 'customer') return { ...(await deleteFor(db, id, snap)), skipped: 'In-house tickets stay in the PMS' } // changed to In-house
   const t = snap.data()
   let columns = await boardColumns(db, t.boardId)
   let here = columns.find((c) => c.id === t.columnId) || null

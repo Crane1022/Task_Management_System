@@ -24,7 +24,8 @@ export function useTaskEditor() {
   // `ticket`: the PMS ticket fields of a new task on a Maintenance board (null otherwise)
   async function create(data, columnId, destBoardId, ticket = null) { if (await board.addTask(data, columnId, destBoardId, ticket)) close() } // stays open if it failed
   async function save(changes, notes) { await board.saveTask(modal.value.task, changes, notes); close() }
-  async function remove() { await board.removeTask(modal.value.task); close() }
+  // `reason`: for a PMS ticket's card (the ticket is deleted in the PMS too, with this reason). Stays open if it failed.
+  async function remove(reason = '') { if (await board.removeTask(modal.value.task, reason)) close() }
   async function move(destValue, columnId) { if (await board.moveToBoard(modal.value.task, destValue, columnId)) close() }
   const canDeleteTask = (task) => board.canManage || (board.canEdit && task?.createdBy === auth.user.uid)
 

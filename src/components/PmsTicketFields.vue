@@ -2,10 +2,11 @@
 import { ref, computed, watch } from 'vue'
 import { X, Link2, Ticket } from 'lucide-vue-next'
 import { ticketChoices, checkDriveLink } from '@/services/pmsIssues'
-import { TICKET_TYPES, tagLabel } from '@/utils/issueStatus'
+import { tagLabel } from '@/utils/issueStatus'
 
 // The PMS "Raise a ticket" fields, in the new-task form of a Maintenance board (the board is the property).
-// Starts as In-house; a unit can be chosen for either type (required for Customer).
+// Always a Customer ticket (a guest or tenant's problem at a unit): only those come to the Maintenance workspace;
+// In-house tickets are raised in the PMS. So the unit is required.
 // Title and "What happened" are the task's own Title and Description. part="top": Type and Unit; part="bottom":
 // tags and Drive links. Both parts share one `ticket` object: { type, unit, unitText, tags, links, choices, ready }.
 const props = defineProps({
@@ -27,7 +28,7 @@ async function load() {
       choices: c, unit: null, unitText: '', ready: true,
       // own role (always) and Operations, so the ticket comes to this workspace
       tags: [...new Set([c.myTag, 'Operations', ...keep].filter(Boolean))],
-      type: ticket.value.type || 'inhouse', // a ticket raised from the task system starts as In-house (it can be changed)
+      type: 'customer', // only Customer tickets come to the Maintenance workspace
     })
   } catch (e) { loadError.value = e.message; ticket.value.ready = false }
   loading.value = false
@@ -74,21 +75,11 @@ function addLink() {
     <p v-if="loading" class="text-xs text-muted">Loading units and roles from the PMS…</p>
     <p v-else-if="loadError" class="text-xs font-semibold text-red-600" role="alert">{{ loadError }}</p>
     <template v-else-if="c">
+      <p class="rounded-lg bg-surface px-3 py-2 text-xs"><b>Customer ticket</b> · a guest or tenant's problem at a unit. In-house matters are raised in the PMS.</p>
       <div>
-        <span class="label">Type <span class="text-red-600">*</span></span>
-        <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Ticket type">
-          <button v-for="ty in TICKET_TYPES" :key="ty.id" type="button" role="radio" :aria-checked="String(ticket.type === ty.id)"
-            class="grid gap-0.5 rounded-xl border px-3 py-2 text-left" :class="ticket.type === ty.id ? 'border-accent bg-accent-soft' : 'border-line bg-surface'"
-            @click="ticket.type = ty.id">
-            <b class="text-sm" :class="ticket.type === ty.id && 'text-accent'">{{ ty.name }}</b><small class="text-xs text-muted">{{ ty.hint }}</small>
-          </button>
-        </div>
-      </div>
-      <!-- the unit can be chosen for both types: needed for Customer, optional for In-house -->
-      <div>
-        <label class="label" for="pt-unit">Unit <span v-if="ticket.type === 'customer'" class="text-red-600">*</span><span v-else class="font-normal normal-case text-muted">(optional)</span></label>
+        <label class="label" for="pt-unit">Unit <span class="text-red-600">*</span></label>
         <select v-if="c.unitsReadable && c.units.length" id="pt-unit" v-model="unitId" class="input">
-          <option value="">{{ ticket.type === 'customer' ? 'Choose the unit' : 'No unit' }}</option>
+          <option value="">Choose the unit</option>
           <optgroup v-for="[name, list] in unitGroups" :key="name" :label="name"><option v-for="u in list" :key="u.id" :value="u.id">{{ u.unitCode }}</option></optgroup>
         </select>
         <input v-else id="pt-unit" v-model="ticket.unitText" class="input uppercase" maxlength="40" placeholder="Type the unit code, e.g. NA-12-03" />
