@@ -9,8 +9,9 @@
 //       ticket changed to In-house has its task removed (it comes back if changed to Customer again).
 //   - No task yet and the Customer ticket is open or in progress (whatever roles are tagged):
 //       a task is made on the board of the ticket's property in the Maintenance workspace (found by PMS property ID,
-//       then by name). Boards are never made here: a ticket with no property, or a property with no board, is refused
-//       with the reason (the PMS shows it), and goes in on its next change once that is fixed.
+//       then by name). A PMS property with no board yet gets one (12 Nov 2026, Khairul): named after the property, with
+//       the columns TODO, DOING and DONE (see makeBoard). A ticket with no property, or a typed name that is
+//       not a PMS property, is still refused with the reason (the PMS shows it).
 //   - The ticket's property changed in the PMS: its task moves to that property's board.
 //   - A task already: its title, description and column follow the ticket. A column is only changed when the ticket's
 //       status differs from what the card's column stands for, so a card in a column you added (e.g. WAITING PARTS)
@@ -69,7 +70,7 @@ async function maintenanceWorkspace(db) {
 // Is this board the one for the ticket's property? (PMS property ID, else the board's name = the property's name)
 const boardIsFor = (b, issue) => (!!issue.propertyId && b.pmsPropertyId === issue.propertyId) || sameBoardName(b.name, issue.property)
 
-// The board of the ticket's property in the Maintenance workspace. Never made here: refused with the reason.
+// The board of the ticket's property in the Maintenance workspace. Made when a PMS property has none (makeBoard).
 // `hintId`: the TMS board a task was created on (a ticket raised from the TMS); it must be a board of the workspace.
 async function boardFor(db, ws, id, issue, hintId) {
   const boards = (await db.collection('boards').where('workspaceId', '==', ws.id).get()).docs.map((d) => ({ id: d.id, ...d.data() }))
@@ -81,10 +82,46 @@ async function boardFor(db, ws, id, issue, hintId) {
   if (!issue.property) throw new HttpError(409, `${id} has no property. Choose its property in the PMS (Edit) so its card goes to that property's board`)
   const live = boards.filter((b) => !b.archived)
   const found = (issue.propertyId && live.find((b) => b.pmsPropertyId === issue.propertyId)) || live.find((b) => sameBoardName(b.name, issue.property))
-  if (!found) throw new HttpError(409, `There is no board called "${issue.property}" in the ${MAINTENANCE_WORKSPACE} workspace. Make one with exactly that name`)
+  if (!found) {
+    if (!issue.propertyId) throw new HttpError(409, `There is no board called "${issue.property}" in the ${MAINTENANCE_WORKSPACE} workspace. Make one with exactly that name`)
+    return makeBoard(db, ws, issue)
+  }
   // remember the PMS property ID, so the board is still found after either side renames it
   if (issue.propertyId && !found.pmsPropertyId) await db.collection('boards').doc(found.id).update({ pmsPropertyId: issue.propertyId })
   return found
+}
+
+// A new board for a PMS property that has none (12 Nov 2026). Its id is pms-{propertyId}, so two tickets raised at the same
+// moment can't make two boards. Columns: TODO (Open), DOING (In progress), DONE (Completed), as Khairul asked.
+// Board and columns are written together, so it never exists without columns.
+const PMS_BOARD_COLUMNS = [{ name: 'TODO', color: 'sky' }, { name: 'DOING', color: 'honey' }, { name: 'DONE', color: 'sage', isDone: true }]
+async function makeBoard(db, ws, issue) {
+  const { FieldValue } = getServices()
+  const ref = db.collection('boards').doc(`pms-${issue.propertyId}`)
+  const old = await ref.get()
+  if (old.exists) {
+    // made before and archived: brought back
+    if (old.data().archived) await ref.update({ archived: false, updatedAt: FieldValue.serverTimestamp() })
+    return { id: ref.id, ...old.data(), archived: false }
+  }
+  const specs = PMS_BOARD_COLUMNS
+  const now = FieldValue.serverTimestamp()
+  const board = {
+    workspaceId: ws.id, name: issue.property, description: 'Made by the PMS for this property\'s maintenance tickets',
+    background: { type: 'color', color: 'sage' }, archived: false, members: {}, pmsPropertyId: issue.propertyId,
+    createdBy: 'pms', createdAt: now, updatedAt: now,
+  }
+  const batch = db.batch()
+  batch.create(ref, board)
+  specs.forEach((c, i) => batch.set(db.collection('columns').doc(), {
+    boardId: ref.id, name: c.name, position: (i + 1) * 1000, isDone: !!c.isDone, color: c.color ?? '', archived: false,
+    limit: c.limit ?? null, createdAt: now,
+  }))
+  try { await batch.commit() } catch (e) {
+    if (e?.code === 6 || e?.code === 'already-exists') { const s = await ref.get(); return { id: ref.id, ...s.data() } } // made a moment ago
+    throw e
+  }
+  return { id: ref.id, ...board }
 }
 
 // action 'maintenanceBoards': the property boards of the Maintenance workspace, for the PMS "Raise a ticket" Property list.
