@@ -80,6 +80,13 @@ export async function readPmsDoc(path, idToken) {
   return (await r.json()).fields || {}
 }
 
+// Is this PMS document gone? (13 Nov 2026, Owner Leads card delete) true only when the PMS answers "not found";
+// any other answer (there, not allowed, PMS down) is false, so nothing is deleted on a guess.
+export async function pmsDocGone(path, idToken) {
+  const r = await getServices().fetch(docUrl(path), { headers: { Authorization: `Bearer ${idToken}` } })
+  return r.status === 404
+}
+
 // A PMS staff record in plain JS: { role, active, name, email }
 export function staffFrom(fields) {
   const role = fields.role?.stringValue || null

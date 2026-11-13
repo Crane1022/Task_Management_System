@@ -9,7 +9,7 @@
 // (pmsLink { type: 'newOwnerListing', id: 'NL-000n' }) through the existing 'link' action.
 // The workspace and board are found by name; a Super Private workspace (superPrivate: true) is never used.
 import { addActivities } from './_lib/activity.js'
-import { getServices, text, HttpError } from './_lib/pms.js'
+import { getServices, text, HttpError, pmsDocGone } from './_lib/pms.js'
 import { boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
 import {
@@ -121,4 +121,32 @@ export async function commentOwnerLead(me, taskId, data) {
   batch.update(ref, { activitySeq, updatedAt: now }, snap.updateTime ? { lastUpdateTime: snap.updateTime } : undefined)
   await commitOrConflict(batch)
   return { ok: true, taskId, commentId: cRef.id }
+}
+
+// action 'deleteOwnerLead' (13 Nov 2026). PMS Directors only. taskId. Deletes an Owner Leads card for good, with its
+// activity records and comments, once its listing is gone from the PMS (the PMS Delete listing deletes the listing
+// first, then calls this). A card whose listing still exists is refused: it is moved to Cancelled instead.
+//                                                                              -> { ok, taskId, deleted: true }
+export async function deleteOwnerLead(me, taskId) {
+  if (me.role !== 'director') throw new HttpError(403, 'Only Directors delete Owner Leads cards')
+  if (!taskId || typeof taskId !== 'string' || taskId.includes('/')) throw new HttpError(400, 'taskId is missing')
+  const { db } = getServices()
+  const board = await ownerLeadsBoard(db)
+  const ref = db.collection('tasks').doc(taskId)
+  const snap = await ref.get()
+  if (!snap.exists) return { ok: true, taskId, deleted: false }
+  const t = snap.data()
+  if (t.boardId !== board.id) throw new HttpError(400, `This task is not on the ${OWNER_LEADS_BOARD} board`)
+  const link = t.pmsLink
+  if (link?.type !== OWNER_LEAD_LINK_TYPE || !/^NL-[0-9]{4,}$/.test(link.id || '')) throw new HttpError(400, 'This card is not linked to a PMS listing')
+  if (!(await pmsDocGone(`newOwnerListings/${link.id}`, me.idToken))) throw new HttpError(409, `${link.id} still exists in the PMS: delete the listing there first`)
+  const acts = await db.collection('task_activities').where('taskId', '==', taskId).get()
+  for (let i = 0; i < acts.docs.length; i += 400) {
+    const batch = db.batch()
+    acts.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+  }
+  if (typeof db.recursiveDelete === 'function') await db.recursiveDelete(ref) // the card and its comments
+  else await ref.delete()
+  return { ok: true, taskId, deleted: true }
 }

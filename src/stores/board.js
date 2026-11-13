@@ -11,7 +11,7 @@ import { subscribeUsers } from '@/services/userService'
 import { subscribeBoardDoc, subscribeWorkspace } from '@/services/workspaceService'
 import { pushToPms, raiseInPms, syncIssue, clearDeletedTickets, deleteInPms } from '@/services/pmsIssues'
 import { isIssueTask, MAINTENANCE_WORKSPACE } from '@/utils/issueStatus'
-import { pushLeadToPms } from '@/services/pmsOwnerLeads'
+import { pushLeadToPms, leadListingGone } from '@/services/pmsOwnerLeads'
 import { isLinkedLead, isOwnerLeadsWorkspace, isOwnerLeadsBoardDoc } from '@/utils/ownerLeadStatus'
 import { startOfToday } from '@/utils/dates'
 import { STEP, byPosition, positionBetween, mergeColumnOrder } from '@/utils/ordering'
@@ -395,7 +395,13 @@ export const useBoardStore = defineStore('board', () => {
   // A PMS ticket's card: the ticket is deleted in the PMS first (Directors, with a reason; it may refuse), then the server
   // removes the card with its activity records. Resolves true when deleted (the task window then closes).
   const removeTask = (task, reason = '') => run(async () => {
-    if (isLeadCard(task)) { ui.toast(`${task.pmsLink.id} is a PMS listing: move its card to Cancelled instead of deleting it`, 'error'); return }
+    // A PMS listing's card: deleted only once a Director has deleted the listing in the PMS (13 Nov 2026)
+    if (isLeadCard(task)) {
+      if (!(await leadListingGone(task))) { ui.toast(`${task.pmsLink.id} is a PMS listing: move its card to Cancelled, or a Director deletes the listing in the PMS first`, 'error'); return }
+      await deleteTask(task.id)
+      ui.toast(`Task deleted (${task.pmsLink.id} was already deleted in the PMS)`)
+      return true
+    }
     if (isIssueTask(task)) {
       const id = task.pmsLink.id
       await deleteInPms(task, reason, auth.profile)

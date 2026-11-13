@@ -21,6 +21,13 @@ function plainError(e, id) {
   return e instanceof Error ? e : new Error(String(e))
 }
 
+// Is the card's listing gone from the PMS? (13 Nov 2026: a Director deleted it there, so the card may be deleted
+// here too). Read as the signed-in person; any doubt (no PMS sign-in, not allowed, PMS down) counts as "still there".
+export async function leadListingGone(task) {
+  if (!isLinkedLead(task) || !pmsAuth.currentUser) return false
+  try { return !(await getDoc(doc(pmsDb, 'newOwnerListings', task.pmsLink.id))).exists() } catch { return false }
+}
+
 // column/columns: the card's new column (null = not moving); title: the card's new title (null = unchanged);
 // description: the card's new description (null = unchanged), written to the listing's Description
 export async function pushLeadToPms(task, { column = null, title = null, description = null } = {}, profile) {

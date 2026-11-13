@@ -27,6 +27,9 @@
 //           Leads card under the caller's name (the PMS sends a listing's Remarks)      -> { ok, taskId, commentId }
 //           Owner Leads cards are linked with `link`, pmsLink { type: 'newOwnerListing', id: 'NL-000n' }; Procurement
 //           may link a card of that board whatever its department, and the person linking it is added to Assigned to.
+//   deleteOwnerLead  Director only.  taskId. Deletes an Owner Leads card with its activity and comments, only once its
+//           listing is gone from the PMS (the PMS Delete listing calls it), see _pms-owner-leads.js
+//                                                                                        -> { ok, taskId, deleted }
 //   performanceTasks  Director only.  data: { employeeUid }. Every task assigned to that person, with its workspace,
 //           for the PMS performance module. Super Private workspaces are left out (see _pms-performance.js)
 //                                                                                        -> { ok, tasks: [...] }
@@ -35,7 +38,7 @@ import { addActivities } from './_lib/activity.js'
 import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
-import { ownerLeads, moveOwnerLead, commentOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
+import { ownerLeads, moveOwnerLead, commentOwnerLead, deleteOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
 import { MAIN_BOARD as BOARD_ID, boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
 const DEFAULT_PROJECT_ID = 'general'
@@ -328,6 +331,7 @@ export default handle(async (req) => {
   if (action === 'ownerLeads') return ownerLeads(me)
   if (action === 'moveOwnerLead') return moveOwnerLead(me, taskId, data || {})
   if (action === 'commentOwnerLead') return commentOwnerLead(me, taskId, data || {})
+  if (action === 'deleteOwnerLead') return deleteOwnerLead(me, taskId)
   if (action === 'performanceTasks') return performanceTasks(getServices().db, me, data || {})
   throw new HttpError(400, 'Unknown action')
 })
