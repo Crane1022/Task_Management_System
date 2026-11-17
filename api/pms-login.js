@@ -30,7 +30,7 @@ export default handle(async (req) => {
   } else {
     const old = snap.data()
     const roleChange = me.role === 'director' ? { role: 'super_admin' } : old.pmsRole === 'director' && old.role === 'super_admin' ? { role: 'employee' } : {}
-    await ref.update({ name: me.name || old.name || '', email: me.email, pmsRole: me.role, departmentId, ...roleChange, stub: FieldValue.delete(), lastLoginAt: now })
+    await ref.update({ name: me.name || old.name || '', email: me.email, pmsRole: me.role, departmentId, ...roleChange, stub: FieldValue.delete(), pmsOff: FieldValue.delete(), pmsOffAt: FieldValue.delete(), lastLoginAt: now })
   }
 
   const token = await tmsAuth.createCustomToken(me.uid, { pmsRole: me.role })

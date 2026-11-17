@@ -91,7 +91,7 @@ beforeEach(() => {
     FieldValue: { serverTimestamp: () => TS, delete: () => DEL },
     Timestamp: { fromDate: ts },
     pmsAuth: { verifyIdToken: async (t) => { if (!TOKENS[t]) throw new Error('bad'); return { uid: TOKENS[t], email: PMS_USERS[TOKENS[t]].email } } },
-    tmsAuth: { createCustomToken: async (uid, claims) => `custom:${uid}:${claims.pmsRole}`, verifyIdToken: async (t) => { if (!t.startsWith('tms-')) throw new Error('bad'); return { uid: t.slice(4) } } },
+    tmsAuth: { revoked: [], async revokeRefreshTokens(uid) { this.revoked.push(uid) }, createCustomToken: async (uid, claims) => `custom:${uid}:${claims.pmsRole}`, verifyIdToken: async (t) => { if (!t.startsWith('tms-')) throw new Error('bad'); return { uid: t.slice(4) } } },
   })
 })
 
@@ -183,6 +183,42 @@ test('update: a custom-role assignee may work their task from the PMS', async ()
   const r = await task({ action: 'create', data: { title: 'Mine', assigneeUids: ['custUid'] } })
   const u = await call(taskHandler, { token: 'tok-cust', body: { action: 'update', taskId: r.body.taskId, data: { text: 'done part' } } })
   assert.equal(u.status, 200)
+})
+
+// ----- staff sync (17 Nov 2026) -----
+test('syncStaff: profiles follow the PMS; switched-off staff are marked and signed out; no profile = skipped', async () => {
+  db.store['users/custUid'] = { name: 'Old Name', email: 'lee@example.test', role: 'dept_manager', pmsRole: 'operations', departmentId: 'operation' }
+  db.store['users/custOffUid'] = { name: 'Ola Old', role: 'employee', pmsRole: 'old_team', departmentId: 'old_team' }
+  db.store['users/offUid'] = { name: 'Old Staff', role: 'employee', pmsRole: 'hr', departmentId: 'hr' }
+  db.store['users/dirUid'] = { name: 'Dina Director', email: 'dina@example.test', role: 'employee', pmsRole: 'director', departmentId: 'director' }
+  db.store['users/procUid'] = { name: 'Pat Procurement', email: 'pat@example.test', role: 'employee', pmsRole: 'procurement', departmentId: 'procurement', pmsOff: true }
+  const r = await task({ action: 'syncStaff', data: { uids: ['custUid', 'custOffUid', 'offUid', 'dirUid', 'procUid', 'opsUid'] } })
+  assert.equal(r.status, 200)
+  assert.deepEqual([r.body.updated, r.body.switchedOff, r.body.skipped], [3, 2, 1])
+  const lee = db.store['users/custUid']
+  assert.equal(lee.name, 'Lee Leasing'); assert.equal(lee.departmentId, 'leasing_team'); assert.equal(lee.pmsRole, 'leasing_team')
+  assert.equal(lee.role, 'dept_manager') // a role set here is kept
+  assert.equal(db.store['departments/leasing_team'].name, 'Leasing Team')
+  assert.equal(db.store['users/custOffUid'].pmsOff, true); assert.equal(db.store['users/offUid'].pmsOff, true)
+  assert.equal(db.store['users/dirUid'].role, 'super_admin')
+  assert.equal('pmsOff' in db.store['users/procUid'], false)
+  assert.equal(db.store['users/opsUid'], undefined) // never signed in: not made here
+  const again = await task({ action: 'syncStaff', data: { uids: ['custUid', 'custOffUid'] } })
+  assert.deepEqual([again.body.updated, again.body.switchedOff, again.body.unchanged], [0, 0, 2])
+})
+
+test('syncStaff: Directors and HR only; everyone at once is Directors only', async () => {
+  assert.equal((await call(taskHandler, { token: 'tok-ops', body: { action: 'syncStaff', data: { uids: ['opsUid'] } } })).status, 403)
+  assert.equal((await task({ action: 'syncStaff', data: { uids: [] } })).status, 400)
+  db.store['users/custUid'] = { name: 'Old Name', pmsRole: 'leasing_team', departmentId: 'leasing_team', role: 'employee' }
+  const r = await task({ action: 'syncStaff', data: { all: true } })
+  assert.equal(r.status, 200); assert.equal(db.store['users/custUid'].name, 'Lee Leasing')
+})
+
+test('login: signing in again (switched back on) clears the switched-off mark', async () => {
+  db.store['users/opsUid'] = { name: 'Omar Ops', role: 'employee', pmsRole: 'operations', departmentId: 'operation', pmsOff: true, pmsOffAt: ts() }
+  assert.equal((await call(loginHandler, { token: 'tok-ops' })).status, 200)
+  assert.equal('pmsOff' in db.store['users/opsUid'], false)
 })
 
 // ----- pms-task create -----

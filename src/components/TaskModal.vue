@@ -196,6 +196,8 @@ function submit() {
           <div v-if="form.description.trim() && !editingDesc" class="input min-h-[4.5rem] text-sm" :class="readonly ? 'cursor-default' : 'cursor-text'" :tabindex="readonly ? -1 : 0" :role="readonly ? undefined : 'button'" :aria-label="readonly ? undefined : 'Edit the description'"
             @click="startEditDesc" @keydown.enter.self.prevent="startEditDesc"><RichText :text="form.description" /></div>
           <div v-else-if="!readonly">
+            <!-- 17 Nov 2026: focusing the box counts as editing, so typing the first letter into an empty description no
+                 longer swaps the box for the formatted view (which closed it after one letter) -->
             <!-- the buttons keep the focus in the text (mousedown.prevent), so editing goes on -->
             <div class="mb-1 flex items-center gap-1" role="toolbar" aria-label="Format the description">
               <button type="button" class="rounded-md p-1.5 text-muted hover:bg-accent-soft hover:text-accent" title="Bold (Ctrl+B)" aria-label="Bold" @mousedown.prevent @click="boldDesc"><Bold class="h-4 w-4" /></button>
@@ -203,7 +205,7 @@ function submit() {
               <button type="button" class="rounded-md p-1.5 text-muted hover:bg-accent-soft hover:text-accent" title="Numbered points" aria-label="Numbered points" @mousedown.prevent @click="listDesc('number')"><ListOrdered class="h-4 w-4" /></button>
               <span class="ml-auto hidden text-[11px] text-muted sm:inline">**bold** · - point · 1. numbered</span>
             </div>
-            <textarea id="t-desc" ref="descBox" v-model="form.description" rows="5" class="input" :placeholder="ticketBoard ? 'Describe the issue, when it started and what you have tried' : null" @keydown="onDescKey" @blur="editingDesc = false" />
+            <textarea id="t-desc" ref="descBox" v-model="form.description" rows="5" class="input" :placeholder="ticketBoard ? 'Describe the issue, when it started and what you have tried' : null" @keydown="onDescKey" @focus="editingDesc = true" @blur="editingDesc = false" />
           </div>
           <p v-else class="text-sm text-muted">No description.</p>
           <DescriptionLinks v-if="t && !readonly" :task-id="t.id" :text="form.description" :attachments="(liveTask ?? t).attachments ?? []" />

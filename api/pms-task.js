@@ -30,6 +30,9 @@
 //   deleteOwnerLead  Director only.  taskId. Deletes an Owner Leads card with its activity and comments, only once its
 //           listing is gone from the PMS (the PMS Delete listing calls it), see _pms-owner-leads.js
 //                                                                                        -> { ok, taskId, deleted }
+//   syncStaff  Director or HR.  data: { uids: [uid] } (the PMS, after a Staff accounts save), or { all: true } (Director,
+//           TMS Staff page). TMS profiles follow the PMS staff records; switched-off staff are signed out, see _pms-staff.js
+//                                                     -> { ok, updated, switchedOff, unchanged, skipped }
 //   performanceTasks  Director only.  data: { employeeUid }. Every task assigned to that person, with its workspace,
 //           for the PMS performance module. Super Private workspaces are left out (see _pms-performance.js)
 //                                                                                        -> { ok, tasks: [...] }
@@ -37,6 +40,7 @@ import { randomUUID } from 'node:crypto'
 import { addActivities } from './_lib/activity.js'
 import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, deptForRole, departmentExists } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
+import { syncStaff } from './_pms-staff.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
 import { ownerLeads, moveOwnerLead, commentOwnerLead, deleteOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
 import { MAIN_BOARD as BOARD_ID, boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
@@ -332,6 +336,7 @@ export default handle(async (req) => {
   if (action === 'moveOwnerLead') return moveOwnerLead(me, taskId, data || {})
   if (action === 'commentOwnerLead') return commentOwnerLead(me, taskId, data || {})
   if (action === 'deleteOwnerLead') return deleteOwnerLead(me, taskId)
+  if (action === 'syncStaff') return syncStaff(me, data || {})
   if (action === 'performanceTasks') return performanceTasks(getServices().db, me, data || {})
   throw new HttpError(400, 'Unknown action')
 })

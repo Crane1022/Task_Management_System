@@ -47,9 +47,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function setUser(u) {
     stopProfile?.(); stopProfile = null
     profile.value = u ? await loadProfile(u) : null
+    // Switched off in the PMS (marked by the staff sync, api/_pms-staff.js): sign out. Signing in again is refused
+    // while they are off, and clears the mark once they are back on.
+    if (u && profile.value?.pmsOff) { profile.value = null; user.value = null; await logout(); return }
     user.value = u
     // keep the profile live, so a role or department change by a Director applies without signing in again
-    if (u && profile.value) stopProfile = subscribeProfile(u.uid, (p) => { if (p) profile.value = p })
+    if (u && profile.value) stopProfile = subscribeProfile(u.uid, (p) => { if (p?.pmsOff) logout(); else if (p) profile.value = p })
     // departments made from PMS roles (names for tasks and the department pickers); the fixed ones work without it
     if (u && profile.value) loadDepartments().catch((e) => console.warn('Departments not loaded:', e.message))
   }
