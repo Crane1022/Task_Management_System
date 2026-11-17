@@ -5,6 +5,7 @@ import {
 } from '@/firebase/sdk'
 import { auth, pmsAuth } from '@/firebase/config'
 import { loadProfile, subscribeProfile } from '@/services/userService'
+import { loadDepartments } from '@/services/departments'
 import { ROLES } from '@/utils/constants'
 
 // Staff sign in with their Widebed PMS email and password (docs/PMS_LINK.md):
@@ -49,6 +50,8 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = u
     // keep the profile live, so a role or department change by a Director applies without signing in again
     if (u && profile.value) stopProfile = subscribeProfile(u.uid, (p) => { if (p) profile.value = p })
+    // departments made from PMS roles (names for tasks and the department pickers); the fixed ones work without it
+    if (u && profile.value) loadDepartments().catch((e) => console.warn('Departments not loaded:', e.message))
   }
 
   // Resolves once both sign-ins are known and matched up (used by the router guard).

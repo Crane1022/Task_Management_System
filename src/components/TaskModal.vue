@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { X, Plus, Trash2, Bold, List, ListOrdered } from 'lucide-vue-next'
-import { PRIORITIES, DEPARTMENTS, displayOf } from '@/utils/constants'
+import { PRIORITIES, pickableDepartments, deptName, displayOf } from '@/utils/constants'
 import { toInput, fromInput } from '@/utils/dates'
 import ConfirmDialog from './ConfirmDialog.vue'
 import TaskAttachments from './TaskAttachments.vue'
@@ -216,7 +216,7 @@ function submit() {
           <div><label class="label" for="t-pri">Priority</label>
             <select id="t-pri" v-model="form.priority" class="input"><option v-for="p in PRIORITIES" :key="p.id" :value="p.id">{{ p.name }}</option></select></div>
           <div><label class="label" for="t-dept">Department</label>
-            <select id="t-dept" v-model="form.departmentId" class="input"><option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ d.name }}</option></select></div>
+            <select id="t-dept" v-model="form.departmentId" class="input"><option v-for="d in pickableDepartments(form.departmentId)" :key="d.id" :value="d.id">{{ deptName(d.id) }}</option></select></div>
           <div><label class="label" for="t-cat">Category</label>
             <input id="t-cat" v-model="form.category" class="input" placeholder="e.g. Move-in" /></div>
           <div><label class="label" for="t-start">Start date</label><input id="t-start" v-model="form.startDate" type="date" class="input" /></div>

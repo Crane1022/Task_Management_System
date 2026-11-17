@@ -4,7 +4,7 @@ import { Info } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { subscribeUsers, updateUser } from '@/services/userService'
-import { ROLES, DEPT_FOR_PMS_ROLE, deptName } from '@/utils/constants'
+import { ROLES, deptForRole, deptName } from '@/utils/constants'
 
 // Director (super_admin): set each person's role here. The department follows the PMS role. Accounts are not made here:
 // they are made on the PMS Staff accounts page, and people appear after their first sign-in
@@ -28,7 +28,7 @@ const ROLE_OPTIONS = [
 const synced = new Set()
 function syncDepartments(list) {
   for (const u of Object.values(list)) {
-    const dept = DEPT_FOR_PMS_ROLE[u.pmsRole]
+    const dept = deptForRole(u.pmsRole)
     if (!dept || u.departmentId === dept || synced.has(u.id)) continue
     synced.add(u.id)
     updateUser(u.id, { departmentId: dept }).catch((e) => console.error('Department sync failed', u.id, e))
@@ -92,7 +92,7 @@ async function change(u, field, value) {
               </td>
               <td class="border-y border-line bg-surface px-3 py-2.5 text-muted">{{ u.email || '—' }}</td>
               <!-- Department = the person's PMS role (changed on the PMS Staff accounts page) -->
-              <td class="border-y border-line bg-surface px-3 py-2.5">{{ deptName(DEPT_FOR_PMS_ROLE[u.pmsRole] ?? u.departmentId) }}</td>
+              <td class="border-y border-line bg-surface px-3 py-2.5">{{ deptName(deptForRole(u.pmsRole) ?? u.departmentId) }}</td>
               <td class="rounded-r-xl border-y border-r border-line bg-surface px-3 py-1.5">
                 <!-- You can't change your own role, so there is always a Director. A PMS Director is always a Director here -->
                 <select :value="u.role" class="input w-48" :disabled="saving === u.id || u.id === auth.user.uid || u.pmsRole === 'director'" :aria-label="`Role of ${u.name}`" @change="change(u, 'role', $event.target.value)">

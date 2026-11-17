@@ -1,4 +1,9 @@
-export const DEPARTMENTS = [
+import { reactive } from 'vue'
+
+// The fixed departments, then (17 Nov 2026) one per role made on the PMS Roles page and the AI Agent, added by
+// setRoleDepartments (services/departments.js) after sign-in. A department whose PMS role was switched off or removed
+// keeps its name with gone: true (shown with a terminated mark, not offered for new tasks).
+const FIXED_DEPARTMENTS = [
   { id: 'director', name: 'Director' },
   { id: 'management', name: 'Management' },
   { id: 'hr', name: 'HR' },
@@ -9,6 +14,17 @@ export const DEPARTMENTS = [
   { id: 'sales', name: 'Sales' },
   { id: 'procurement', name: 'Procurement' },
 ]
+export const DEPARTMENTS = reactive([...FIXED_DEPARTMENTS])
+export const isFixedDepartment = (id) => FIXED_DEPARTMENTS.some((d) => d.id === id)
+// list: [{ id, name, gone }] for the PMS-role departments (replaces the previous list)
+export function setRoleDepartments(list) {
+  const extra = list.filter((d) => d.id && !isFixedDepartment(d.id)).sort((a, b) => a.name.localeCompare(b.name))
+  DEPARTMENTS.splice(FIXED_DEPARTMENTS.length, DEPARTMENTS.length, ...extra)
+}
+// The departments a task may be put in: no terminated ones, except the one it is in already
+export const pickableDepartments = (current) => DEPARTMENTS.filter((d) => !d.gone || d.id === current)
+// The mark shown beside a terminated department's name
+export const TERMINATED_MARK = '⊘'
 
 export const PRIORITIES = [
   { id: 'low', name: 'Low', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200' },
@@ -28,8 +44,15 @@ export const DEFAULT_COLUMNS = ['NEW PROJECT', 'TODO', 'DOING', 'REVIEW', 'DONE'
 export const DEPT_FOR_PMS_ROLE = {
   director: 'director', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
 }
+// A role made on the PMS Roles page (and the AI Agent, 'ai') is its own department, with the role id as its id
+export const deptForRole = (role) => (role ? DEPT_FOR_PMS_ROLE[role] ?? role : null)
 
-export const deptName = (id) => (id ? DEPARTMENTS.find((d) => d.id === id)?.name ?? id : 'No department')
+export function deptName(id) {
+  if (!id) return 'No department'
+  const d = DEPARTMENTS.find((x) => x.id === id)
+  if (!d) return id
+  return d.gone ? `${d.name} ${TERMINATED_MARK}` : d.name
+}
 export const priorityOf = (id) => PRIORITIES.find((p) => p.id === id) ?? PRIORITIES[1]
 
 export const COLUMN_COLORS = [

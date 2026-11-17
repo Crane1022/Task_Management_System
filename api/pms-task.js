@@ -35,7 +35,7 @@
 //                                                                                        -> { ok, tasks: [...] }
 import { randomUUID } from 'node:crypto'
 import { addActivities } from './_lib/activity.js'
-import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
+import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, deptForRole, departmentExists } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
 import { ownerLeads, moveOwnerLead, commentOwnerLead, deleteOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
@@ -52,7 +52,7 @@ const DEPT_SYNC_ROLES = ['procurement']
 // PMS roles with a task inbox in the PMS (tasks of their department not yet linked to a PMS record)
 const INBOX_ROLES = ['director', 'procurement']
 const INBOX_LIMIT = 50
-const myDept = (me) => DEPT_FOR_PMS_ROLE[me.role] || null
+const myDept = (me) => deptForRole(me.role)
 
 // Due dates are saved as midnight Malaysia time, like the date input on the board (fromInput in src/utils/dates.js)
 function dueFrom(s, Timestamp) {
@@ -94,7 +94,7 @@ async function ensureAssignees(db, FieldValue, me, uids) {
     const fields = await readPmsDoc(`users/${uid}`, me.idToken)
     const s = fields && staffFrom(fields)
     if (!s || !s.active || !s.role) throw new HttpError(400, `Unknown or switched-off PMS staff: ${uid}`)
-    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: s.role === 'director' ? 'super_admin' : 'employee', departmentId: DEPT_FOR_PMS_ROLE[s.role] ?? null, pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
+    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: s.role === 'director' ? 'super_admin' : 'employee', departmentId: deptForRole(s.role), pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
     await ref.set(profile)
     profiles.push(profile)
   }
@@ -120,8 +120,8 @@ async function create(me, data) {
 
   const assignees = await ensureAssignees(db, FieldValue, me, uids)
   // Department: as sent, else the first assignee's, else guessed from their PMS role, else Management
-  const departmentId = DEPARTMENT_IDS.includes(data.departmentId) ? data.departmentId
-    : assignees[0]?.departmentId || DEPT_FOR_PMS_ROLE[assignees[0]?.pmsRole] || 'management'
+  const departmentId = typeof data.departmentId === 'string' && await departmentExists(data.departmentId, me.idToken) ? data.departmentId
+    : assignees[0]?.departmentId || deptForRole(assignees[0]?.pmsRole) || 'management'
 
   const now = FieldValue.serverTimestamp()
   const ref = db.collection('tasks').doc()
@@ -204,7 +204,7 @@ async function update(me, taskId, data) {
 
   // departmentId: hand the task to another department (e.g. marketing after payment, operation when live)
   if (data.departmentId !== undefined) {
-    if (!DEPARTMENT_IDS.includes(data.departmentId)) throw new HttpError(400, 'Unknown department')
+    if (typeof data.departmentId !== 'string' || !await departmentExists(data.departmentId, me.idToken)) throw new HttpError(400, 'Unknown department')
     if (data.departmentId !== t.departmentId) {
       changes.departmentId = data.departmentId
       logs.push(['updated', `department to ${data.departmentId} (from the PMS)`])

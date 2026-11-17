@@ -112,6 +112,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---------- departments made from PMS roles (17 Nov 2026) ----------
+    // departments/{roleId} = { name, pmsRole }: written only by the sign-in function (api/pms-login.js, Admin SDK).
+    // Kept after the role is removed in the PMS, so old tasks still show the department's name.
+    match /departments/{id} {
+      allow read: if hasProfile();
+      allow write: if false;
+    }
+
     // ---------- board columns ----------
     match /columns/{id} {
       allow read: if signedIn()

@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { dueState, startOfToday } from '@/utils/dates'
-import { DEPARTMENTS } from '@/utils/constants'
+import { DEPARTMENTS, deptName } from '@/utils/constants'
 
 // All dashboard numbers come from the same tasks the Kanban board uses.
 // `scope` = { assignee, department, days } chosen on the dashboard.
@@ -33,7 +33,7 @@ export function useStats(board, scope) {
     DEPARTMENTS.map((d) => {
       const list = tasks.value.filter((t) => t.departmentId === d.id)
       const done = list.filter((t) => t.completedAt).length
-      return { label: d.name, total: list.length, value: list.length ? Math.round((done / list.length) * 100) : 0 }
+      return { label: deptName(d.id), total: list.length, value: list.length ? Math.round((done / list.length) * 100) : 0 }
     }).filter((r) => r.total))
 
   const byDue = (a, b) => a.dueDate.toMillis() - b.dueDate.toMillis()

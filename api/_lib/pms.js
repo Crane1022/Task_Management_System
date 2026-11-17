@@ -19,6 +19,15 @@ export const DEPARTMENT_IDS = ['director', 'management', 'hr', 'operation', 'fin
 export const DEPT_FOR_PMS_ROLE = {
   director: 'director', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
 }
+// The PMS AI Agent login (17 Nov 2026): a normal employee here, in its own department 'ai'
+export const AI_ROLE = 'ai'
+export const AI_DEPT_NAME = 'AI Agent'
+// Role ids and department ids made from them: letters, digits, - and _ only (they become document ids)
+export const ROLE_ID = /^[A-Za-z0-9_-]{1,64}$/
+export const isCustomRole = (role) => !!role && !PMS_ROLES.includes(role) && role !== AI_ROLE
+// A person's department follows their PMS role (17 Nov 2026, Khairul): built-in roles by the map above, a role made on
+// the PMS Roles page (and the AI Agent) is its own department, with the role id as the department id.
+export const deptForRole = (role) => (role ? DEPT_FOR_PMS_ROLE[role] ?? role : null)
 
 // ----- Firebase (created on first use, so importing this file never needs credentials) -----
 let services = null
@@ -91,14 +100,37 @@ export async function pmsDocGone(path, idToken) {
 export function staffFrom(fields) {
   const role = fields.role?.stringValue || null
   return {
-    role: PMS_ROLES.includes(role) ? role : null,
+    // Built-in roles, roles made on the PMS Roles page and the AI Agent (17 Nov 2026: was built-in roles only)
+    role: role && ROLE_ID.test(role) ? role : null,
     active: fields.active?.booleanValue !== false,
     name: fields.displayName?.stringValue || '',
     email: fields.email?.stringValue || '',
   }
 }
 
+// A role made on the PMS Roles page, from PMS roles/{id} read as the caller: { name, active }, or null when it is gone
+export async function pmsRoleInfo(role, idToken) {
+  if (!isCustomRole(role) || !ROLE_ID.test(role)) return null
+  const f = await readPmsDoc(`roles/${role}`, idToken)
+  if (!f) return null
+  return { name: f.name?.stringValue || role, active: f.active?.booleanValue !== false }
+}
+
+// The name of a department made from a PMS role (custom roles and the AI Agent), else null
+export async function deptNameFor(role, idToken) {
+  if (role === AI_ROLE) return AI_DEPT_NAME
+  return (await pmsRoleInfo(role, idToken))?.name ?? null
+}
+
+// May a task be put in this department? The fixed TMS departments, the AI Agent's, or an active PMS custom role.
+export async function departmentExists(id, idToken) {
+  if (DEPARTMENT_IDS.includes(id) || id === AI_ROLE) return true
+  const info = await pmsRoleInfo(id, idToken)
+  return !!info && info.active
+}
+
 // Checks the token and the staff record. Throws 401 (not a PMS login) or 403 (switched off / no role).
+// A role made on the PMS Roles page must still exist there and be switched on, as for the PMS sign-in.
 export async function pmsUser(req) {
   const idToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
   if (!idToken) throw new HttpError(401, 'Not signed in to the PMS')
@@ -111,7 +143,13 @@ export async function pmsUser(req) {
   if (!fields) throw new HttpError(403, 'No PMS staff record for this account')
   const s = staffFrom(fields)
   if (!s.active || !s.role) throw new HttpError(403, 'This PMS account is switched off or has no role')
-  return { uid: decoded.uid, idToken, role: s.role, name: s.name || decoded.email || 'PMS staff', email: decoded.email || s.email || '' }
+  let roleName = null
+  if (isCustomRole(s.role)) {
+    const info = await pmsRoleInfo(s.role, idToken)
+    if (!info || !info.active) throw new HttpError(403, 'This PMS role is switched off or was removed')
+    roleName = info.name
+  } else if (s.role === AI_ROLE) roleName = AI_DEPT_NAME
+  return { uid: decoded.uid, idToken, role: s.role, roleName, name: s.name || decoded.email || 'PMS staff', email: decoded.email || s.email || '' }
 }
 
 // Wraps a handler: CORS, then errors become JSON. `fn` returns the JSON reply.
@@ -129,4 +167,4 @@ export function handle(fn) {
 }
 
 // ----- small text helpers -----
-export const text = (v, max) => String(v ?? '').trim().slice(0, max)
+export const text = (v, max) => String(v ?? '').trim().slice(0, max)

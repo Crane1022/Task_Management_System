@@ -52,10 +52,26 @@ const PMS_USERS = {
   offUid: { role: 'hr', active: false, displayName: 'Old Staff' },
   noRoleUid: { active: true, displayName: 'No Role' },
   procUid: { role: 'procurement', active: true, displayName: 'Pat Procurement', email: 'pat@example.test' },
+  // 17 Nov 2026: a role made on the PMS Roles page, one switched off there, one removed, and the AI Agent
+  custUid: { role: 'leasing_team', active: true, displayName: 'Lee Leasing', email: 'lee@example.test' },
+  custOffUid: { role: 'old_team', active: true, displayName: 'Ola Old' },
+  custGoneUid: { role: 'gone_team', active: true, displayName: 'Gus Gone' },
+  aiUid: { role: 'ai', active: true, displayName: 'AI Agent', email: 'ai@example.test' },
 }
-const TOKENS = { 'tok-dir': 'dirUid', 'tok-ops': 'opsUid', 'tok-off': 'offUid', 'tok-norole': 'noRoleUid', 'tok-proc': 'procUid' }
+// PMS roles/ (custom roles only; any signed-in PMS user may read them)
+const PMS_ROLE_DOCS = {
+  leasing_team: { name: 'Leasing Team', active: true },
+  old_team: { name: 'Old Team', active: false },
+}
+const TOKENS = { 'tok-dir': 'dirUid', 'tok-ops': 'opsUid', 'tok-off': 'offUid', 'tok-norole': 'noRoleUid', 'tok-proc': 'procUid',
+  'tok-cust': 'custUid', 'tok-custoff': 'custOffUid', 'tok-custgone': 'custGoneUid', 'tok-ai': 'aiUid' }
 const fields = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'boolean' ? { booleanValue: v } : { stringValue: v }]))
 async function fakeFetch(url, { headers }) {
+  if (url.includes('/documents/roles/')) {
+    const r = PMS_ROLE_DOCS[url.split('/roles/')[1]]
+    if (!TOKENS[headers.Authorization.replace('Bearer ', '')] || !r) return { ok: false, status: 404, json: async () => ({}) }
+    return { ok: true, json: async () => ({ fields: fields(r) }) }
+  }
   const uid = url.split('/users/')[1]
   const caller = TOKENS[headers.Authorization.replace('Bearer ', '')]
   const allowed = caller === uid || PMS_USERS[caller]?.role === 'director' // like the PMS rules
@@ -123,6 +139,50 @@ test('login: creates the profile once, never overwrites role, department follows
   await call(loginHandler, { token: 'tok-ops' })
   assert.equal(db.store['users/opsUid'].role, 'dept_manager')
   assert.equal(db.store['users/opsUid'].departmentId, 'operation')
+})
+
+test('login: a role made on the PMS Roles page signs in as its own department, named in departments/', async () => {
+  const r = await call(loginHandler, { token: 'tok-cust' })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.token, 'custom:custUid:leasing_team')
+  const p = db.store['users/custUid']
+  assert.equal(p.role, 'employee'); assert.equal(p.departmentId, 'leasing_team'); assert.equal(p.pmsRole, 'leasing_team')
+  assert.equal(db.store['departments/leasing_team'].name, 'Leasing Team')
+})
+
+test('login: a PMS custom role switched off or removed on the Roles page is refused', async () => {
+  assert.equal((await call(loginHandler, { token: 'tok-custoff' })).status, 403)
+  assert.equal((await call(loginHandler, { token: 'tok-custgone' })).status, 403)
+  assert.equal((await call(taskHandler, { token: 'tok-custoff', body: { action: 'list', data: { type: 'x', id: '1' } } })).status, 403)
+  assert.equal(db.store['users/custOffUid'], undefined)
+})
+
+test('login: the AI Agent signs in as a normal employee in the AI Agent department', async () => {
+  const r = await call(loginHandler, { token: 'tok-ai' })
+  assert.equal(r.status, 200)
+  const p = db.store['users/aiUid']
+  assert.equal(p.role, 'employee'); assert.equal(p.departmentId, 'ai')
+  assert.equal(db.store['departments/ai'].name, 'AI Agent')
+})
+
+test('create: custom-role and AI assignees, custom department accepted, unknown refused', async () => {
+  const r = await task({ action: 'create', data: { title: 'Lease check', assigneeUids: ['custUid', 'aiUid'] } })
+  assert.equal(r.status, 200)
+  const t = db.store[`tasks/${r.body.taskId}`]
+  assert.equal(t.departmentId, 'leasing_team') // the first assignee's department
+  assert.equal(db.store['users/aiUid'].departmentId, 'ai')
+  const r2 = await task({ action: 'create', data: { title: 'To AI', departmentId: 'ai' } })
+  assert.equal(db.store[`tasks/${r2.body.taskId}`].departmentId, 'ai')
+  const r3 = await task({ action: 'create', data: { title: 'Bad dept', departmentId: 'old_team' } })
+  assert.equal(db.store[`tasks/${r3.body.taskId}`].departmentId, 'management') // switched-off role: not used
+  assert.equal((await task({ action: 'update', taskId: r.body.taskId, data: { departmentId: 'old_team' } })).status, 400)
+  assert.equal((await task({ action: 'update', taskId: r.body.taskId, data: { departmentId: 'ai' } })).status, 200)
+})
+
+test('update: a custom-role assignee may work their task from the PMS', async () => {
+  const r = await task({ action: 'create', data: { title: 'Mine', assigneeUids: ['custUid'] } })
+  const u = await call(taskHandler, { token: 'tok-cust', body: { action: 'update', taskId: r.body.taskId, data: { text: 'done part' } } })
+  assert.equal(u.status, 200)
 })
 
 // ----- pms-task create -----
@@ -302,7 +362,8 @@ test('update: Procurement syncs the whole checklist of a same-department task, k
   const sid = db.store['tasks/p1'].subtasks[0].id
   await proc({ action: 'update', taskId: 'p1', data: { subtasks: [{ id: sid, done: false }] } })
   assert.equal(db.store['tasks/p1'].subtasks[0].done, false)
-})
+})
+
 // ----- workspace backfill (old workspaces get superPrivate: false so every Director can list them) -----
 test('backfill: Directors only; fills only a missing superPrivate, never changes true or false', async () => {
   db.store['users/dirUid'] = { role: 'super_admin' }; db.store['users/opsUid'] = { role: 'employee' }

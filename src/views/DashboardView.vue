@@ -7,7 +7,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useStats } from '@/composables/useStats'
-import { DEPARTMENTS, displayOf } from '@/utils/constants'
+import { DEPARTMENTS, displayOf, deptName } from '@/utils/constants'
 import { WIDGET_TYPES, SIZE_CLASS, CATS, makeWidget } from '@/utils/widgets'
 import DashboardWidget from '@/components/DashboardWidget.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -70,7 +70,7 @@ const catFor = (i) => (i % 3 === 0 ? CATS[(i / 3) % CATS.length] : '')
 
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <select v-model="scope.assignee" class="input w-44" aria-label="Employee"><option value="">All employees</option><option v-for="u in people" :key="u.id" :value="u.id">{{ displayOf(u) }}</option></select>
-        <select v-if="auth.isAdmin" v-model="scope.department" class="input w-44" aria-label="Department"><option value="">All departments</option><option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ d.name }}</option></select>
+        <select v-if="auth.isAdmin" v-model="scope.department" class="input w-44" aria-label="Department"><option value="">All departments</option><option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ deptName(d.id) }}</option></select>
         <select v-model.number="scope.days" class="input w-44" aria-label="Date range"><option :value="0">Any time</option><option :value="7">Created in last 7 days</option><option :value="30">Last 30 days</option><option :value="90">Last 90 days</option></select>
       </div>
 

@@ -1,8 +1,10 @@
 // POST /api/pms-login   Authorization: Bearer <PMS ID token>   ->   { ok, token }
 // Staff sign in to the TMS with their PMS email and password. The login page signs in to the PMS project,
 // sends the PMS ID token here, and gets back a TMS custom token for the same uid (signInWithCustomToken).
-// Switched-off PMS accounts and accounts with no PMS role are refused.
-import { getServices, handle, pmsUser, DEPT_FOR_PMS_ROLE } from './_lib/pms.js'
+// Switched-off PMS accounts and accounts with no PMS role are refused. Roles made on the PMS Roles page and the
+// AI Agent sign in too (17 Nov 2026): each is its own department, named in departments/{roleId} (kept after the role
+// is removed in the PMS, so old tasks still show its name).
+import { getServices, handle, pmsUser, deptForRole } from './_lib/pms.js'
 
 export default handle(async (req) => {
   const me = await pmsUser(req)
@@ -15,7 +17,11 @@ export default handle(async (req) => {
   const ref = db.collection('users').doc(me.uid)
   const snap = await ref.get()
   const now = FieldValue.serverTimestamp()
-  const departmentId = DEPT_FOR_PMS_ROLE[me.role] ?? null
+  const departmentId = deptForRole(me.role)
+  // A department made from a PMS role: keep its name here (only this server writes departments/)
+  if (me.roleName && departmentId) {
+    await db.collection('departments').doc(departmentId).set({ name: me.roleName, pmsRole: me.role, updatedAt: now }, { merge: true })
+  }
   if (!snap.exists) {
     await ref.set({
       name: me.name, email: me.email, role: me.role === 'director' ? 'super_admin' : 'employee', departmentId, pmsRole: me.role,
