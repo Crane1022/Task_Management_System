@@ -95,7 +95,10 @@ export async function pmsUser(req) {
   const idToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
   if (!idToken) throw new HttpError(401, 'Not signed in to the PMS')
   let decoded
-  try { decoded = await getServices().pmsAuth.verifyIdToken(idToken) } catch { throw new HttpError(401, 'Not signed in to the PMS') }
+  // The key is loaded first, so a missing or broken TMS_SERVICE_ACCOUNT isn't reported as a bad login
+  let services
+  try { services = getServices() } catch (e) { console.error('TMS key:', e.message); throw new HttpError(500, 'Task system key missing or invalid (TMS_SERVICE_ACCOUNT)') }
+  try { decoded = await services.pmsAuth.verifyIdToken(idToken) } catch { throw new HttpError(401, 'Not signed in to the PMS') }
   const fields = await readPmsDoc(`users/${decoded.uid}`, idToken)
   if (!fields) throw new HttpError(403, 'No PMS staff record for this account')
   const s = staffFrom(fields)
