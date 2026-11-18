@@ -4,7 +4,10 @@
 // check every other PMS action already goes through).
 //
 // What it returns: every task assigned to ONE employee, with the workspace it sits in, so the PMS Director can
-// pick the workspace(s) and tick which tasks count for the quarter. What it never returns:
+// pick the workspace(s) and tick which tasks count for the quarter.
+// 18 Nov 2026: also each task's column (id and real name) and due date history (dueHistory: who moved the date, from,
+// to, when), and `boards`: every board those tasks are on with ALL its column names, so the PMS Director can say which
+// columns count as done on each board. What it never returns:
 //   - any task on a board inside a SUPER PRIVATE workspace (dropped here, on the server — it never leaves the TMS);
 //   - task descriptions, comments, attachments or activity (title, dates and status only).
 //
@@ -55,7 +58,19 @@ export async function performanceTasks(db, caller, data = {}) {
   const wsSnaps = workspaceIds.length ? await db.getAll(...workspaceIds.map(id => db.collection('workspaces').doc(id))) : [];
   const workspaces = new Map(wsSnaps.filter(s => s.exists).map(s => [s.id, s.data()]));
 
+  // Every column of those boards (the PMS lists them all, not only the ones holding this person's tasks).
+  // The original board's columns are saved with boardId 'main'. A board has a handful of columns, so one query each.
+  const usedBoards = [...new Set(tasks.map(t => t.boardId || 'main'))].slice(0, 60);
+  const colSnaps = await Promise.all(usedBoards.map(id => db.collection('columns').where('boardId', '==', id).get()));
+  const columnsOf = new Map(usedBoards.map((id, i) => [id, colSnaps[i].docs
+    .map(d => ({ id: d.id, name: String(d.data().name || 'Column').slice(0, 60), isDone: d.data().isDone === true,
+      archived: d.data().archived === true, position: Number(d.data().position) || 0 }))
+    .sort((a, b) => a.position - b.position)
+    .map(({ position, ...c }) => c)]));
+  const columnById = new Map([...columnsOf.values()].flat().map(c => [c.id, c]));
+
   const out = [];
+  const boardsOut = new Map();
   for (const t of tasks) {
     const board = boards.get(t.boardId);
     let workspaceId = 'main', workspaceName = 'Main board', boardName = 'Main board';
@@ -69,6 +84,9 @@ export async function performanceTasks(db, caller, data = {}) {
     }
     const status = String(t.status || '');
     const s = status.toLowerCase();
+    const bid = t.boardId || 'main';
+    if (!boardsOut.has(bid)) boardsOut.set(bid, { id: bid, name: boardName, workspaceId, workspaceName, columns: columnsOf.get(bid) || [] });
+    const col = columnById.get(t.columnId);
     out.push({
       id: t.id,
       title: String(t.title || 'Untitled task').slice(0, 200),
@@ -79,8 +97,13 @@ export async function performanceTasks(db, caller, data = {}) {
       dueDate: iso(t.dueDate),
       createdAt: iso(t.createdAt),
       workspaceId, workspaceName,
-      boardId: t.boardId || 'main', boardName
+      boardId: bid, boardName,
+      columnId: t.columnId || '', column: col ? col.name : status,
+      // who moved the due date and when, oldest first (only changes made since this was added on 18 Nov 2026)
+      dueHistory: (Array.isArray(t.dueHistory) ? t.dueHistory : []).slice(-50).map(h => ({
+        from: iso(h?.from), to: iso(h?.to), byName: String(h?.byName || 'Someone').slice(0, 80), at: iso(h?.at)
+      }))
     });
   }
-  return { ok: true, tasks: out };
+  return { ok: true, tasks: out, boards: [...boardsOut.values()] };
 }

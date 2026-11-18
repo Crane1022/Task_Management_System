@@ -1,11 +1,12 @@
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, runTransaction, onSnapshot, query, where, serverTimestamp,
+  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, runTransaction, onSnapshot, query, where, serverTimestamp, Timestamp,
 } from '@/firebase/sdk'
 import { db } from '@/firebase/config'
 import { BOARD_ID, DEFAULT_PROJECT_ID, displayOf } from '@/utils/constants'
 import { byPosition } from '@/utils/ordering'
 import { activityId, newest, staleLegacy, summarize } from '@/utils/activity'
 import { MAX_ATTACHMENTS } from '@/utils/links'
+import { withDueChange } from '@/utils/dueHistory'
 
 const tasksRef = collection(db, 'tasks')
 const activitiesRef = collection(db, 'task_activities')
@@ -31,6 +32,11 @@ function changeTask(taskId, build, user) {
     const task = { id: snap.id, ...snap.data() }
     const { changes, note } = build(task)
     const write = { ...changes, updatedAt: serverTimestamp() }
+    // 18 Nov 2026: a new due date is also added to the task's due date history (who, from, to, when) for the PMS
+    if ('dueDate' in changes) {
+      const history = withDueChange(task.dueHistory, task.dueDate, changes.dueDate, user, Timestamp.now())
+      if (history) write.dueHistory = history
+    }
     if (note) {
       const seq = (task.activitySeq ?? 0) + 1
       write.activitySeq = seq
