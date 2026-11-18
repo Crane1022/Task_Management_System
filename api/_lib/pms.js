@@ -89,12 +89,13 @@ export async function readPmsDoc(path, idToken) {
   return (await r.json()).fields || {}
 }
 
-// Lists one PMS collection as the caller (e.g. issues/IS-0001/replies), at most 300 documents. [] when not allowed.
+// Lists one PMS collection as the caller (e.g. issues/IS-0001/replies), at most 300 documents: [{ id, fields }].
+// [] when not allowed.
 // (18 Nov 2026, the ticket's files as card attachments)
 export async function listPmsDocs(path, idToken) {
   const r = await getServices().fetch(`${docUrl(path)}?pageSize=300`, { headers: { Authorization: `Bearer ${idToken}` } })
   if (!r.ok) return []
-  return ((await r.json()).documents || []).map((d) => d.fields || {})
+  return ((await r.json()).documents || []).map((d) => ({ id: String(d.name ?? '').split('/').pop(), fields: d.fields || {} }))
 }
 
 // Is this PMS document gone? (13 Nov 2026, Owner Leads card delete) true only when the PMS answers "not found";

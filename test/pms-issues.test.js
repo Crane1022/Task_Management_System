@@ -30,8 +30,9 @@ function fakeDb() {
     where: (f, op, v) => q(col, [...filters, [f, op, v]], lim),
     limit: (l) => q(col, filters, l),
     async get() {
-      const docs = Object.entries(store).filter(([k]) => k.split('/')[0] === col)
-        .map(([k, d]) => ({ id: k.split('/')[1], data: () => d, ref: docRef(col, k.split('/')[1]) }))
+      // col may be a path (tasks/x/comments): only its own documents, not deeper ones
+      const docs = Object.entries(store).filter(([k]) => k.startsWith(`${col}/`) && !k.slice(col.length + 1).includes('/'))
+        .map(([k, d]) => ({ id: k.slice(col.length + 1), data: () => d, ref: docRef(col, k.slice(col.length + 1)) }))
         .filter((d) => filters.every(([f, , v]) => d.data()[f] === v)).slice(0, lim)
       return { docs }
     },
@@ -77,7 +78,7 @@ async function fakeFetch(url, { headers }) {
   const t = ISSUES[id]
   const role = STAFF[caller]?.role
   if (!t || !(role === 'director' || t.tags.includes(TAG[role]) || t.raisedByUid === caller || (t.assigneeUids || []).includes(caller))) return no
-  if (sub === 'replies') return { ok: true, json: async () => ({ documents: (REPLIES[id] || []).map((r) => ({ fields: fieldsOf(r) })) }) }
+  if (sub === 'replies') return { ok: true, json: async () => ({ documents: (REPLIES[id] || []).map(({ id: rid, ...r }) => ({ name: `x/issues/${id}/replies/${rid}`, fields: fieldsOf(r) })) }) }
   return { ok: true, json: async () => ({ fields: fieldsOf(t) }) }
 }
 
@@ -322,10 +323,33 @@ test('files posted in comments are added to the card on the next sync; TMS attac
   assert.equal(task('IS-0001').departmentId, 'operation') // no Maintenance department: as before
   db.store['tasks/issue-IS-0001'].attachments = [{ id: 'x', name: 'Quote', url: 'https://drive.google.com/file/d/q' }]
   REPLIES['IS-0001'] = [
-    { at: '2026-11-18T10:00', text: 'after', links: [{ name: 'after.pdf', url: 'https://drive.google.com/file/d/b2/view' }] },
-    { at: '2026-11-18T09:00', text: 'before', links: [{ name: 'before.jpg', url: 'https://drive.google.com/file/d/b1/view' }] },
+    { id: 'r2', at: '2026-11-18T10:00', text: 'after', links: [{ name: 'after.pdf', url: 'https://drive.google.com/file/d/b2/view' }] },
+    { id: 'r1', at: '2026-11-18T09:00', text: 'before', links: [{ name: 'before.jpg', url: 'https://drive.google.com/file/d/b1/view' }] },
   ]
   r = await sync('tok-ops', 'IS-0001')
   assert.equal(r.code, 200, JSON.stringify(r.body))
   assert.deepEqual(task('IS-0001').attachments.map((a) => a.name), ['Quote', 'before.jpg', 'after.pdf'])
+})
+
+test('the ticket comments are copied to the card once, oldest first, with who wrote them', async () => {
+  REPLIES['IS-0001'] = [
+    { id: 'r2', by: 'Max Maintenance', byUid: 'mntUid', at: '2026-11-18T10:00', createdAt: '2026-11-18T02:00:00Z', text: 'Fixed', links: [{ name: 'done.jpg', url: 'https://drive.google.com/file/d/z/view' }] },
+    { id: 'r1', by: 'Omar Ops', byUid: 'opsUid', at: '2026-11-18T09:00', createdAt: '2026-11-18T01:00:00Z', text: 'On my way', links: [] },
+  ]
+  let r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(r.body.commentsAdded, 2)
+  const c = (cid) => db.store[`tasks/issue-IS-0001/comments/${cid}`]
+  assert.equal(c('pms-r1').text, 'On my way')
+  assert.equal(c('pms-r1').userName, 'Omar Ops (PMS)')
+  assert.equal(c('pms-r2').text, 'Fixed\n(File: done.jpg, see Attachments)')
+  assert.equal(c('pms-r2').userId, 'mntUid')
+  db.store['tasks/issue-IS-0001/comments/tms1'] = { text: 'Written in the TMS', userId: 'opsUid', userName: 'Omar Ops' }
+  r = await sync('tok-ops', 'IS-0001') // again: nothing copied twice, the TMS comment stays
+  assert.equal(r.body.commentsAdded, undefined)
+  assert.equal(r.body.unchanged, true)
+  assert.equal(Object.keys(db.store).filter((k) => k.startsWith('tasks/issue-IS-0001/comments/')).length, 3)
+  REPLIES['IS-0001'].push({ id: 'r3', by: 'Omar Ops', byUid: 'opsUid', createdAt: '2026-11-18T03:00:00Z', text: 'Thanks', links: [] })
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.body.commentsAdded, 1)
 })

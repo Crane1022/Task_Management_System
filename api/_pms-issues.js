@@ -17,7 +17,7 @@
 //       status differs from what the card's column stands for, so a card in a column you added (e.g. WAITING PARTS)
 //       stays there while the ticket is In progress.
 //   - People (18 Nov 2026): the card's Assigned to follows the ticket's raiser (raisedByUid) + assigneeUids; department
-//     "Maintenance" when that department exists; the ticket's files (ticket + comments) are the card's attachments. Before: the card's Assigned to followed only the ticket's assigneeUids (the PMS "People" picker). Someone with
+//     "Maintenance" when that department exists; the ticket's files (ticket + comments) are the card's attachments; the ticket's comments are copied to the card (one way). Before: the card's Assigned to followed only the ticket's assigneeUids (the PMS "People" picker). Someone with
 //       no TMS profile gets a placeholder profile (ensureAssignees); someone who can't be found is left off, the rest still sync.
 //   - Deleted in the PMS: the task is deleted here too, with its activity records and comments (the PMS keeps the ticket,
 //       marked deleted with its reason, in its audit log).
@@ -67,12 +67,40 @@ const fileAttachment = (f, me) => ({
 const filesFrom = (list) => (Array.isArray(list) ? list : [])
   .filter((l) => l && typeof l.url === 'string' && DRIVE_LINK.test(l.url) && l.url.length <= 2000)
   .map((l) => ({ name: text(typeof l.name === 'string' && l.name.trim() ? l.name : 'Drive file', 120), url: l.url }))
+// The ticket's comments (PMS issues/{id}/replies), read as the caller, oldest first: [{ id, by, byUid, text, links, at, createdAt }]
+async function pmsReplies(id, me) {
+  return (await listPmsDocs(`issues/${id}/replies`, me.idToken)).map((d) => ({ id: d.id, ...(plain({ mapValue: { fields: d.fields } }) || {}) }))
+    .filter((r) => /^[A-Za-z0-9_-]{1,100}$/.test(r.id))
+    .sort((a, b) => String(a.createdAt ?? a.at ?? '').localeCompare(String(b.createdAt ?? b.at ?? '')))
+}
 // The ticket's own files, then its comments' files (oldest comment first), each link once
-async function ticketFiles(id, issue, me) {
-  const replies = (await listPmsDocs(`issues/${id}/replies`, me.idToken)).map((f) => plain({ mapValue: { fields: f } }) || {})
-    .sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')))
-  const all = [...issue.links, ...replies.flatMap((r) => filesFrom(r.links))]
+function ticketFiles(issue) {
+  const all = [...issue.links, ...(issue.replies ?? []).flatMap((r) => filesFrom(r.links))]
   return all.filter((f, i) => all.findIndex((x) => x.url === f.url) === i)
+}
+// The ticket's comments as comments on the card (Khairul, 18 Nov 2026). One way: PMS -> TMS. Each has the id pms-<reply id>, so
+// it is added once; comments written in the TMS stay in the TMS. Files in a comment are on the card as attachments already.
+async function syncComments(db, Timestamp, FieldValue, taskId, replies) {
+  if (!replies?.length) return 0
+  const col = db.collection(`tasks/${taskId}/comments`)
+  const have = new Set((await col.get()).docs.map((d) => d.id))
+  const add = replies.filter((r) => !have.has(`pms-${r.id}`))
+  if (!add.length) return 0
+  for (let i = 0; i < add.length; i += 400) {
+    const batch = db.batch()
+    for (const r of add.slice(i, i + 400)) {
+      const files = filesFrom(r.links).map((f) => f.name)
+      const body = String(r.text ?? '').trim()
+      const fileNote = files.length ? `${body ? '\n' : ''}(${files.length === 1 ? 'File' : 'Files'}: ${files.join(', ')}, see Attachments)` : ''
+      const when = r.createdAt && !Number.isNaN(Date.parse(r.createdAt)) ? Timestamp.fromDate(new Date(r.createdAt)) : FieldValue.serverTimestamp()
+      batch.set(col.doc(`pms-${r.id}`), {
+        text: (body + fileNote).slice(0, 2000) || '(comment)', userId: typeof r.byUid === 'string' ? r.byUid : '',
+        userName: `${text(typeof r.by === 'string' ? r.by : '', 80) || 'PMS user'} (PMS)`, createdAt: when, pmsReplyId: r.id,
+      })
+    }
+    await batch.commit()
+  }
+  return add.length
 }
 // The card's attachments plus the ticket's files not on it yet (null when there is nothing to add)
 function withFiles(atts, files, me) {
@@ -215,7 +243,7 @@ async function createFor(db, FieldValue, me, id, issue, hintId) {
     columnId: column.id, status: column.name.toUpperCase(), position: await endPosition(db, column.id),
     title, description: issue.body, category: '', departmentId, priority: 'medium',
     assignedTo, subtasks: [], labels: ['PMS', id, issue.unit].filter(Boolean),
-    attachments: withFiles([], await ticketFiles(id, issue, me), me)?.list ?? [],
+    attachments: withFiles([], ticketFiles(issue), me)?.list ?? [],
     startDate: null, dueDate: null, estimatedHours: null, completedAt: column.isDone ? now : null,
     pmsLink: { type: ISSUE_LINK_TYPE, id }, pmsKey: issueKey(id), source: 'pms',
     createdBy: me.uid, createdByName: me.name, createdAt: now, updatedAt: now, activitySeq: 1,
@@ -299,7 +327,7 @@ async function updateFor(db, FieldValue, me, id, issue, snap) {
   }
 
   // the ticket's files not on the card yet (from the ticket and its comments)
-  const more = withFiles(t.attachments ?? [], await ticketFiles(id, issue, me), me)
+  const more = withFiles(t.attachments ?? [], ticketFiles(issue), me)
   if (more) {
     changes.attachments = more.list
     logs.push(['attached', `${more.added.length === 1 ? more.added[0].name : `${more.added.length} files`} from ${id} in the PMS`])
@@ -317,13 +345,19 @@ async function updateFor(db, FieldValue, me, id, issue, snap) {
 
 // data: { id: 'IS-0001', boardId? }  ->  { ok, taskId (null when the ticket does not go to the TMS), column, status, ... }
 export async function syncIssue(me, data) {
-  const { db, FieldValue } = getServices()
+  const { db, FieldValue, Timestamp } = getServices()
   const id = text(data.id, 20)
   if (!ISSUE_ID.test(id)) throw new HttpError(400, 'Send the ticket number, e.g. IS-0001')
   const fields = await readPmsDoc(`issues/${id}`, me.idToken)
   if (!fields) throw new HttpError(404, `No ticket ${id}, or you cannot see it in the PMS`)
   const issue = issueFrom(fields)
+  if (issue.type === 'customer' && issue.status !== 'deleted') issue.replies = await pmsReplies(id, me)
   const snap = await db.collection('tasks').doc(issueTaskId(id)).get()
-  if (!snap.exists) return createFor(db, FieldValue, me, id, issue, text(data.boardId, 100))
-  return updateFor(db, FieldValue, me, id, issue, snap)
+  const out = snap.exists ? await updateFor(db, FieldValue, me, id, issue, snap) : await createFor(db, FieldValue, me, id, issue, text(data.boardId, 100))
+  // the ticket's comments follow onto the card (18 Nov 2026)
+  if (out?.taskId && !out.deleted && issue.replies?.length) {
+    const added = await syncComments(db, Timestamp, FieldValue, out.taskId, issue.replies)
+    if (added) { out.commentsAdded = added; delete out.unchanged }
+  }
+  return out
 }
