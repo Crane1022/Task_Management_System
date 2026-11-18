@@ -54,8 +54,11 @@ const STAFF = {
   dirUid: { role: 'director', displayName: 'Dina Director' },
   opsUid: { role: 'operations', displayName: 'Omar Ops' },
   mktUid: { role: 'marketing', displayName: 'Mia Marketing' },
+  // 18 Nov 2026: a custom role "Maintenance" (made on the PMS Roles page); tagged on tickets as a person, not by role
+  mntUid: { role: 'maintenance_x1', displayName: 'Max Maintenance' },
+  mnt2Uid: { role: 'maintenance_x1', displayName: 'Nur Maintenance' },
 }
-const TOKENS = { 'tok-dir': 'dirUid', 'tok-ops': 'opsUid', 'tok-mkt': 'mktUid' }
+const TOKENS = { 'tok-dir': 'dirUid', 'tok-ops': 'opsUid', 'tok-mkt': 'mktUid', 'tok-mnt': 'mntUid' }
 const TAG = { director: 'Director', operations: 'Operations', marketing: 'Marketing' }
 let ISSUES
 const val = (v) => (Array.isArray(v) ? { arrayValue: { values: v.map(val) } } : typeof v === 'boolean' ? { booleanValue: v } : v == null ? { nullValue: null } : { stringValue: String(v) })
@@ -65,12 +68,14 @@ async function fakeFetch(url, { headers }) {
   const no = { ok: false, json: async () => ({}) }
   if (url.includes('/users/')) {
     const uid = url.split('/users/')[1]
-    return caller === uid && STAFF[uid] ? { ok: true, json: async () => ({ fields: fieldsOf({ ...STAFF[uid], active: true }) }) } : no
+    // any active PMS staff member reads staff records (PMS rules: users read if anyStaff())
+    return STAFF[caller] && STAFF[uid] ? { ok: true, json: async () => ({ fields: fieldsOf({ ...STAFF[uid], active: true }) }) } : no
   }
+  if (url.includes('/roles/')) return url.endsWith('/roles/maintenance_x1') ? { ok: true, json: async () => ({ fields: fieldsOf({ name: 'Maintenance', active: true }) }) } : no
   const id = url.split('/issues/')[1]
   const t = ISSUES[id]
   const role = STAFF[caller]?.role
-  if (!t || !(role === 'director' || t.tags.includes(TAG[role]) || t.raisedByUid === caller)) return no
+  if (!t || !(role === 'director' || t.tags.includes(TAG[role]) || t.raisedByUid === caller || (t.assigneeUids || []).includes(caller))) return no
   return { ok: true, json: async () => ({ fields: fieldsOf(t) }) }
 }
 
@@ -269,4 +274,28 @@ test('the Owner Leads fix: a linked task of a workspace board moves within ITS b
   const r = await call('tok-dir', { action: 'update', taskId: 'lead1', data: { completed: true } })
   assert.equal(r.code, 200, JSON.stringify(r.body))
   assert.equal(db.store['tasks/lead1'].columnId, 'L3') // the DONE column of Owner Leads, not of the Main board
+})
+
+// ----- 18 Nov 2026: the ticket's People (assigneeUids) are the card's Assigned to -----
+test('People on the ticket become the card assignees; removing one is followed; placeholder profiles are made', async () => {
+  ISSUES['IS-0001'].assigneeUids = ['mntUid', 'mnt2Uid']
+  let r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.deepEqual(task('IS-0001').assignedTo, ['mntUid', 'mnt2Uid'])
+  assert.equal(db.store['users/mntUid'].name, 'Max Maintenance') // never signed in to the TMS: a placeholder profile
+  assert.equal(db.store['users/mntUid'].stub, true)
+  ISSUES['IS-0001'].assigneeUids = ['mnt2Uid']
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.deepEqual(task('IS-0001').assignedTo, ['mnt2Uid'])
+  r = await sync('tok-ops', 'IS-0001') // nothing changed: no new activity
+  assert.equal(r.body.unchanged, true)
+})
+
+test('a tagged person whose role is not tagged can sync the ticket; an unknown uid is left off, not refused', async () => {
+  ISSUES['IS-0001'].assigneeUids = ['mntUid', 'ghostUid']
+  const r = await sync('tok-mnt', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.deepEqual(task('IS-0001').assignedTo, ['mntUid'])
+  assert.equal((await sync('tok-mnt', 'IS-0004')).code, 404) // not tagged on that one
 })

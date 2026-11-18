@@ -42,6 +42,7 @@ import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, Http
 import { performanceTasks } from './_pms-performance.js'
 import { syncStaff } from './_pms-staff.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
+import { ensureAssignees } from './_lib/assignees.js'
 import { ownerLeads, moveOwnerLead, commentOwnerLead, deleteOwnerLead, isOwnerLeadCard, OWNER_LEAD_LINK_TYPE } from './_pms-owner-leads.js'
 import { MAIN_BOARD as BOARD_ID, boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
@@ -87,23 +88,7 @@ async function forwardTo(db, t, name) {
   return { columnId: target.id, status: target.name.toUpperCase(), position: await endPosition(db, target.id), columnName: target.name }
 }
 
-// Each assignee needs a TMS profile so the board can show their name. Someone who has never signed in to the
-// TMS gets a placeholder profile from their PMS staff record (Directors can read every PMS staff record).
-async function ensureAssignees(db, FieldValue, me, uids) {
-  const profiles = []
-  for (const uid of uids) {
-    const ref = db.collection('users').doc(uid)
-    const snap = await ref.get()
-    if (snap.exists) { profiles.push(snap.data()); continue }
-    const fields = await readPmsDoc(`users/${uid}`, me.idToken)
-    const s = fields && staffFrom(fields)
-    if (!s || !s.active || !s.role) throw new HttpError(400, `Unknown or switched-off PMS staff: ${uid}`)
-    const profile = { name: s.name || s.email || 'PMS staff', email: s.email, role: s.role === 'director' ? 'super_admin' : 'employee', departmentId: deptForRole(s.role), pmsRole: s.role, stub: true, createdAt: FieldValue.serverTimestamp() }
-    await ref.set(profile)
-    profiles.push(profile)
-  }
-  return profiles
-}
+// ensureAssignees moved to api/_lib/assignees.js (18 Nov 2026), unchanged; the Issues sync uses it too
 
 async function create(me, data) {
   if (me.role !== 'director') throw new HttpError(403, 'Only Directors create tasks')

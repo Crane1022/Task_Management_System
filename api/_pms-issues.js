@@ -16,10 +16,13 @@
 //   - A task already: its title, description and column follow the ticket. A column is only changed when the ticket's
 //       status differs from what the card's column stands for, so a card in a column you added (e.g. WAITING PARTS)
 //       stays there while the ticket is In progress.
+//   - People (18 Nov 2026): the card's Assigned to follows the ticket's assigneeUids (the PMS "People" picker). Someone with
+//       no TMS profile gets a placeholder profile (ensureAssignees); someone who can't be found is left off, the rest still sync.
 //   - Deleted in the PMS: the task is deleted here too, with its activity records and comments (the PMS keeps the ticket,
 //       marked deleted with its reason, in its audit log).
 import { addActivities } from './_lib/activity.js'
 import { getServices, readPmsDoc, text, HttpError } from './_lib/pms.js'
+import { ensureAssignees } from './_lib/assignees.js'
 import { boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 import {
   ISSUE_ID, ISSUE_LINK_TYPE, issueKey, issueTaskId, issueDepartment, MAINTENANCE_WORKSPACE,
@@ -27,6 +30,18 @@ import {
 } from './_lib/issueStatus.js'
 
 const DEFAULT_PROJECT_ID = 'general'
+const UID = /^[A-Za-z0-9_-]{1,128}$/
+
+// The ticket's people who have (or now get) a TMS profile. One that can't be found or is switched off is left out and logged,
+// so one bad uid never stops the sync. (18 Nov 2026)
+async function assigneesFor(db, FieldValue, me, uids) {
+  const ok = []
+  for (const uid of uids) {
+    try { await ensureAssignees(db, FieldValue, me, [uid]); ok.push(uid) } catch (e) { console.warn(`[pms-issues] assignee ${uid} left off:`, e.message) }
+  }
+  return ok
+}
+const sameList = (a, b) => a.length === b.length && [...a].sort().join('|') === [...b].sort().join('|')
 
 // A Firestore REST value in plain JS
 export function plain(v) {
@@ -51,6 +66,8 @@ export function issueFrom(fields) {
     tags: Array.isArray(o.tags) ? o.tags.filter((t) => typeof t === 'string') : [],
     property: str(o.property, 80), propertyId: str(o.propertyId, 100), unit: str(o.unit, 40),
     raisedBy: str(o.raisedBy, 80), deleteReason: str(o.deleteReason, 300),
+    // 18 Nov 2026: the people tagged on the ticket (PMS uids = TMS uids), at most 20
+    assigneeUids: [...new Set(Array.isArray(o.assigneeUids) ? o.assigneeUids.filter((u) => typeof u === 'string' && UID.test(u)) : [])].slice(0, 20),
   }
 }
 
@@ -149,12 +166,13 @@ async function createFor(db, FieldValue, me, id, issue, hintId) {
   const now = FieldValue.serverTimestamp()
   const ref = db.collection('tasks').doc(issueTaskId(id))
   const title = issue.title || id
+  const assignedTo = await assigneesFor(db, FieldValue, me, issue.assigneeUids)
   const batch = db.batch()
   batch.create(ref, { // create: refused if a sync at the same moment made it first
     projectId: DEFAULT_PROJECT_ID, boardId: board.id, workspaceId: ws.id,
     columnId: column.id, status: column.name.toUpperCase(), position: await endPosition(db, column.id),
     title, description: issue.body, category: '', departmentId, priority: 'medium',
-    assignedTo: [], subtasks: [], labels: ['PMS', id, issue.unit].filter(Boolean), attachments: [],
+    assignedTo, subtasks: [], labels: ['PMS', id, issue.unit].filter(Boolean), attachments: [],
     startDate: null, dueDate: null, estimatedHours: null, completedAt: column.isDone ? now : null,
     pmsLink: { type: ISSUE_LINK_TYPE, id }, pmsKey: issueKey(id), source: 'pms',
     createdBy: me.uid, createdByName: me.name, createdAt: now, updatedAt: now, activitySeq: 1,
@@ -229,6 +247,13 @@ async function updateFor(db, FieldValue, me, id, issue, snap) {
   if (to && !to.isDone && t.completedAt) changes.completedAt = null
 
   if (!t.departmentId && issueDepartment(issue.tags)) changes.departmentId = issueDepartment(issue.tags)
+
+  // 18 Nov 2026: Assigned to follows the ticket's People (assigneeUids)
+  const assignedTo = await assigneesFor(db, FieldValue, me, issue.assigneeUids)
+  if (!sameList(assignedTo, t.assignedTo || [])) {
+    changes.assignedTo = assignedTo
+    logs.push(['updated', `Assigned to synced from ${id} in the PMS`])
+  }
 
   const reply = { ok: true, taskId: snap.id, boardId, columnId: to?.id ?? null, column: to?.name ?? null, status: pmsStatusOfColumn(to, columns) }
   if (!logs.length && !Object.keys(changes).length) return { ...reply, unchanged: true }
