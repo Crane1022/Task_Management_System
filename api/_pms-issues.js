@@ -16,12 +16,14 @@
 //   - A task already: its title, description and column follow the ticket. A column is only changed when the ticket's
 //       status differs from what the card's column stands for, so a card in a column you added (e.g. WAITING PARTS)
 //       stays there while the ticket is In progress.
-//   - People (18 Nov 2026): the card's Assigned to follows the ticket's assigneeUids (the PMS "People" picker). Someone with
+//   - People (18 Nov 2026): the card's Assigned to follows the ticket's raiser (raisedByUid) + assigneeUids; department
+//     "Maintenance" when that department exists; the ticket's files (ticket + comments) are the card's attachments. Before: the card's Assigned to followed only the ticket's assigneeUids (the PMS "People" picker). Someone with
 //       no TMS profile gets a placeholder profile (ensureAssignees); someone who can't be found is left off, the rest still sync.
 //   - Deleted in the PMS: the task is deleted here too, with its activity records and comments (the PMS keeps the ticket,
 //       marked deleted with its reason, in its audit log).
 import { addActivities } from './_lib/activity.js'
-import { getServices, readPmsDoc, text, HttpError } from './_lib/pms.js'
+import { createHash } from 'node:crypto'
+import { getServices, readPmsDoc, listPmsDocs, text, HttpError } from './_lib/pms.js'
 import { ensureAssignees } from './_lib/assignees.js'
 import { boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 import {
@@ -40,6 +42,43 @@ async function assigneesFor(db, FieldValue, me, uids) {
     try { await ensureAssignees(db, FieldValue, me, [uid]); ok.push(uid) } catch (e) { console.warn(`[pms-issues] assignee ${uid} left off:`, e.message) }
   }
   return ok
+}
+// Assigned to = the person who raised the ticket plus its People (Khairul, 18 Nov 2026)
+const peopleOf = (issue) => [...new Set([issue.raisedByUid, ...issue.assigneeUids].filter(Boolean))]
+// Customer ticket cards go in the department named "Maintenance" (the PMS custom role's department, made by pms-login /
+// staff sync). If there is none yet, the old choice (issueDepartment: Procurement or Operations) is kept. (18 Nov 2026)
+async function maintenanceDepartment(db) {
+  try {
+    const snap = await db.collection('departments').get()
+    const d = snap.docs.find((x) => String(x.data().name ?? '').trim().toLowerCase() === 'maintenance' && !x.data().gone)
+    return d ? d.id : null
+  } catch (e) { console.warn('[pms-issues] departments not readable:', e.message); return null }
+}
+// The ticket's files (Google Drive links on the ticket and on its comments) as card attachments, so one click opens the
+// file itself (Khairul, 18 Nov 2026). Each gets a fixed id from its link (pms-f-...), so it is added once; the TMS keeps
+// at most 30 attachments, files past that are left off. Attachments people add in the TMS are never touched.
+const DRIVE_LINK = /^https:\/\/(drive|docs)\.google\.com\//
+const IMAGE = /\.(jpe?g|png|gif|webp|heic|bmp)$/i
+const fileAttId = (url) => `pms-f-${createHash('sha1').update(url).digest('hex').slice(0, 16)}`
+const fileAttachment = (f, me) => ({
+  id: fileAttId(f.url), name: f.name, url: f.url, provider: 'Google Drive', kind: IMAGE.test(f.name) ? 'image' : /\.pdf$/i.test(f.name) ? 'pdf' : 'other',
+  addedBy: me.uid, addedByName: me.name ?? '', addedAt: Date.now(),
+})
+const filesFrom = (list) => (Array.isArray(list) ? list : [])
+  .filter((l) => l && typeof l.url === 'string' && DRIVE_LINK.test(l.url) && l.url.length <= 2000)
+  .map((l) => ({ name: text(typeof l.name === 'string' && l.name.trim() ? l.name : 'Drive file', 120), url: l.url }))
+// The ticket's own files, then its comments' files (oldest comment first), each link once
+async function ticketFiles(id, issue, me) {
+  const replies = (await listPmsDocs(`issues/${id}/replies`, me.idToken)).map((f) => plain({ mapValue: { fields: f } }) || {})
+    .sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')))
+  const all = [...issue.links, ...replies.flatMap((r) => filesFrom(r.links))]
+  return all.filter((f, i) => all.findIndex((x) => x.url === f.url) === i)
+}
+// The card's attachments plus the ticket's files not on it yet (null when there is nothing to add)
+function withFiles(atts, files, me) {
+  const have = new Set(atts.map((a) => a.id))
+  const add = files.filter((f) => !have.has(fileAttId(f.url))).slice(0, Math.max(0, 30 - atts.length))
+  return add.length ? { list: [...atts, ...add.map((f) => fileAttachment(f, me))], added: add } : null
 }
 const sameList = (a, b) => a.length === b.length && [...a].sort().join('|') === [...b].sort().join('|')
 
@@ -65,8 +104,10 @@ export function issueFrom(fields) {
     type: o.type === 'customer' || o.type === 'inhouse' ? o.type : (o.unit ? 'customer' : 'inhouse'),
     tags: Array.isArray(o.tags) ? o.tags.filter((t) => typeof t === 'string') : [],
     property: str(o.property, 80), propertyId: str(o.propertyId, 100), unit: str(o.unit, 40),
-    raisedBy: str(o.raisedBy, 80), deleteReason: str(o.deleteReason, 300),
+    raisedBy: str(o.raisedBy, 80), raisedByUid: typeof o.raisedByUid === 'string' && UID.test(o.raisedByUid) ? o.raisedByUid : '', deleteReason: str(o.deleteReason, 300),
     // 18 Nov 2026: the people tagged on the ticket (PMS uids = TMS uids), at most 20
+    // the files added when the ticket was raised (Google Drive links only)
+    links: filesFrom(o.links),
     assigneeUids: [...new Set(Array.isArray(o.assigneeUids) ? o.assigneeUids.filter((u) => typeof u === 'string' && UID.test(u)) : [])].slice(0, 20),
   }
 }
@@ -154,7 +195,6 @@ export async function maintenanceBoards() {
 
 async function createFor(db, FieldValue, me, id, issue, hintId) {
   if (issue.type !== 'customer') return { ok: true, taskId: null, skipped: 'In-house tickets stay in the PMS' }
-  const departmentId = issueDepartment(issue.tags) // Procurement when tagged first, otherwise Operations
   if (!['open', 'progress'].includes(issue.status)) return { ok: true, taskId: null, skipped: 'The ticket is not open or in progress' }
 
   const ws = await maintenanceWorkspace(db)
@@ -166,13 +206,16 @@ async function createFor(db, FieldValue, me, id, issue, hintId) {
   const now = FieldValue.serverTimestamp()
   const ref = db.collection('tasks').doc(issueTaskId(id))
   const title = issue.title || id
-  const assignedTo = await assigneesFor(db, FieldValue, me, issue.assigneeUids)
+  const assignedTo = await assigneesFor(db, FieldValue, me, peopleOf(issue))
+  // Maintenance department; without one, Procurement when tagged first, otherwise Operations
+  const departmentId = (await maintenanceDepartment(db)) || issueDepartment(issue.tags)
   const batch = db.batch()
   batch.create(ref, { // create: refused if a sync at the same moment made it first
     projectId: DEFAULT_PROJECT_ID, boardId: board.id, workspaceId: ws.id,
     columnId: column.id, status: column.name.toUpperCase(), position: await endPosition(db, column.id),
     title, description: issue.body, category: '', departmentId, priority: 'medium',
-    assignedTo, subtasks: [], labels: ['PMS', id, issue.unit].filter(Boolean), attachments: [],
+    assignedTo, subtasks: [], labels: ['PMS', id, issue.unit].filter(Boolean),
+    attachments: withFiles([], await ticketFiles(id, issue, me), me)?.list ?? [],
     startDate: null, dueDate: null, estimatedHours: null, completedAt: column.isDone ? now : null,
     pmsLink: { type: ISSUE_LINK_TYPE, id }, pmsKey: issueKey(id), source: 'pms',
     createdBy: me.uid, createdByName: me.name, createdAt: now, updatedAt: now, activitySeq: 1,
@@ -246,13 +289,20 @@ async function updateFor(db, FieldValue, me, id, issue, snap) {
   if (to?.isDone && !t.completedAt) changes.completedAt = now
   if (to && !to.isDone && t.completedAt) changes.completedAt = null
 
-  if (!t.departmentId && issueDepartment(issue.tags)) changes.departmentId = issueDepartment(issue.tags)
+  if (!t.departmentId) changes.departmentId = (await maintenanceDepartment(db)) || issueDepartment(issue.tags)
 
-  // 18 Nov 2026: Assigned to follows the ticket's People (assigneeUids)
-  const assignedTo = await assigneesFor(db, FieldValue, me, issue.assigneeUids)
+  // 18 Nov 2026: Assigned to follows the ticket's raiser + People (assigneeUids)
+  const assignedTo = await assigneesFor(db, FieldValue, me, peopleOf(issue))
   if (!sameList(assignedTo, t.assignedTo || [])) {
     changes.assignedTo = assignedTo
     logs.push(['updated', `Assigned to synced from ${id} in the PMS`])
+  }
+
+  // the ticket's files not on the card yet (from the ticket and its comments)
+  const more = withFiles(t.attachments ?? [], await ticketFiles(id, issue, me), me)
+  if (more) {
+    changes.attachments = more.list
+    logs.push(['attached', `${more.added.length === 1 ? more.added[0].name : `${more.added.length} files`} from ${id} in the PMS`])
   }
 
   const reply = { ok: true, taskId: snap.id, boardId, columnId: to?.id ?? null, column: to?.name ?? null, status: pmsStatusOfColumn(to, columns) }

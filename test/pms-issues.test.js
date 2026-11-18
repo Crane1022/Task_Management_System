@@ -61,7 +61,8 @@ const STAFF = {
 const TOKENS = { 'tok-dir': 'dirUid', 'tok-ops': 'opsUid', 'tok-mkt': 'mktUid', 'tok-mnt': 'mntUid' }
 const TAG = { director: 'Director', operations: 'Operations', marketing: 'Marketing' }
 let ISSUES
-const val = (v) => (Array.isArray(v) ? { arrayValue: { values: v.map(val) } } : typeof v === 'boolean' ? { booleanValue: v } : v == null ? { nullValue: null } : { stringValue: String(v) })
+let REPLIES
+const val = (v) => (Array.isArray(v) ? { arrayValue: { values: v.map(val) } } : v && typeof v === 'object' ? { mapValue: { fields: fieldsOf(v) } } : typeof v === 'boolean' ? { booleanValue: v } : v == null ? { nullValue: null } : { stringValue: String(v) })
 const fieldsOf = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, val(v)]))
 async function fakeFetch(url, { headers }) {
   const caller = TOKENS[headers.Authorization.replace('Bearer ', '')]
@@ -72,16 +73,18 @@ async function fakeFetch(url, { headers }) {
     return STAFF[caller] && STAFF[uid] ? { ok: true, json: async () => ({ fields: fieldsOf({ ...STAFF[uid], active: true }) }) } : no
   }
   if (url.includes('/roles/')) return url.endsWith('/roles/maintenance_x1') ? { ok: true, json: async () => ({ fields: fieldsOf({ name: 'Maintenance', active: true }) }) } : no
-  const id = url.split('/issues/')[1]
+  const [id, sub] = url.split('/issues/')[1].split('?')[0].split('/')
   const t = ISSUES[id]
   const role = STAFF[caller]?.role
   if (!t || !(role === 'director' || t.tags.includes(TAG[role]) || t.raisedByUid === caller || (t.assigneeUids || []).includes(caller))) return no
+  if (sub === 'replies') return { ok: true, json: async () => ({ documents: (REPLIES[id] || []).map((r) => ({ fields: fieldsOf(r) })) }) }
   return { ok: true, json: async () => ({ fields: fieldsOf(t) }) }
 }
 
 let db
 beforeEach(() => {
   db = fakeDb()
+  REPLIES = {}
   ISSUES = {
     'IS-0001': { type: 'customer', title: 'Aircond leaking', body: 'Master bedroom', status: 'open', tags: ['Operations'], property: 'Vista Tower', propertyId: 'p1', unit: 'VT-12A', raisedByUid: 'mktUid' },
     'IS-0002': { type: 'customer', title: 'Lobby door', body: 'In the lobby', status: 'open', tags: ['Marketing'], property: 'vista tower', unit: '', raisedByUid: 'mktUid' },
@@ -281,13 +284,13 @@ test('People on the ticket become the card assignees; removing one is followed; 
   ISSUES['IS-0001'].assigneeUids = ['mntUid', 'mnt2Uid']
   let r = await sync('tok-ops', 'IS-0001')
   assert.equal(r.code, 200, JSON.stringify(r.body))
-  assert.deepEqual(task('IS-0001').assignedTo, ['mntUid', 'mnt2Uid'])
+  assert.deepEqual(task('IS-0001').assignedTo, ['mktUid', 'mntUid', 'mnt2Uid']) // the raiser + People
   assert.equal(db.store['users/mntUid'].name, 'Max Maintenance') // never signed in to the TMS: a placeholder profile
   assert.equal(db.store['users/mntUid'].stub, true)
   ISSUES['IS-0001'].assigneeUids = ['mnt2Uid']
   r = await sync('tok-ops', 'IS-0001')
   assert.equal(r.code, 200, JSON.stringify(r.body))
-  assert.deepEqual(task('IS-0001').assignedTo, ['mnt2Uid'])
+  assert.deepEqual(task('IS-0001').assignedTo, ['mktUid', 'mnt2Uid'])
   r = await sync('tok-ops', 'IS-0001') // nothing changed: no new activity
   assert.equal(r.body.unchanged, true)
 })
@@ -296,6 +299,33 @@ test('a tagged person whose role is not tagged can sync the ticket; an unknown u
   ISSUES['IS-0001'].assigneeUids = ['mntUid', 'ghostUid']
   const r = await sync('tok-mnt', 'IS-0001')
   assert.equal(r.code, 200, JSON.stringify(r.body))
-  assert.deepEqual(task('IS-0001').assignedTo, ['mntUid'])
+  assert.deepEqual(task('IS-0001').assignedTo, ['mktUid', 'mntUid'])
   assert.equal((await sync('tok-mnt', 'IS-0004')).code, 404) // not tagged on that one
+})
+
+// ----- 18 Nov 2026: Maintenance department and the ticket's Drive folder link -----
+test('a new card goes in the Maintenance department when there is one; the ticket files are its attachments', async () => {
+  db.store['departments/maintenance_x1'] = { name: 'Maintenance', pmsRole: 'maintenance_x1' }
+  ISSUES['IS-0001'].links = [{ name: 'leak.jpg', url: 'https://drive.google.com/file/d/a1/view' }, { name: 'bad', url: 'https://evil.example/x' }]
+  let r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(task('IS-0001').departmentId, 'maintenance_x1')
+  assert.deepEqual(task('IS-0001').attachments.map((a) => [a.name, a.url, a.kind]), [['leak.jpg', 'https://drive.google.com/file/d/a1/view', 'image']])
+  r = await sync('tok-ops', 'IS-0001') // again: nothing added twice
+  assert.equal(task('IS-0001').attachments.length, 1)
+  assert.equal(r.body.unchanged, true)
+})
+
+test('files posted in comments are added to the card on the next sync; TMS attachments are kept', async () => {
+  let r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(task('IS-0001').departmentId, 'operation') // no Maintenance department: as before
+  db.store['tasks/issue-IS-0001'].attachments = [{ id: 'x', name: 'Quote', url: 'https://drive.google.com/file/d/q' }]
+  REPLIES['IS-0001'] = [
+    { at: '2026-11-18T10:00', text: 'after', links: [{ name: 'after.pdf', url: 'https://drive.google.com/file/d/b2/view' }] },
+    { at: '2026-11-18T09:00', text: 'before', links: [{ name: 'before.jpg', url: 'https://drive.google.com/file/d/b1/view' }] },
+  ]
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.deepEqual(task('IS-0001').attachments.map((a) => a.name), ['Quote', 'before.jpg', 'after.pdf'])
 })
