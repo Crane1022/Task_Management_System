@@ -57,6 +57,19 @@ async function maintenanceDepartment(db) {
 // The ticket's files (Google Drive links on the ticket and on its comments) as card attachments, so one click opens the
 // file itself (Khairul, 18 Nov 2026). Each gets a fixed id from its link (pms-f-...), so it is added once; the TMS keeps
 // at most 30 attachments, files past that are left off. Attachments people add in the TMS are never touched.
+// 19 Nov 2026: the ticket's Date and Deadline (YYYY-MM-DD, Malaysia) -> the card's start and due dates (midnight MYT)
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+const dayOf = (v) => (typeof v === 'string' && DAY.test(v) ? v : '')
+const dayTs = (s, Timestamp) => (s ? Timestamp.fromDate(new Date(`${s}T00:00:00+08:00`)) : null)
+const msOf = (t) => t?.toMillis?.() ?? t?.toDate?.()?.getTime?.() ?? null
+const sameTs = (a, b) => msOf(a) === msOf(b)
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const niceDay = (s) => `${+s.slice(8, 10)} ${MON[+s.slice(5, 7) - 1]} ${s.slice(0, 4)}`
+// The comment a completed ticket adds to its card (once per completion: a reopened ticket completed again adds another)
+const completionId = (c) => `pms-done-${createHash('sha1').update([c.actionDate, c.solution, c.fixedByName].join('|')).digest('hex').slice(0, 12)}`
+const completionText = (c) => [`Completed. Action date: ${niceDay(c.actionDate)}.`, c.solution && `Solution: ${c.solution}`, c.fixedByName && `Fixed by: ${c.fixedByName}.`]
+  .filter(Boolean).join('\n')
+
 const DRIVE_LINK = /^https:\/\/(drive|docs)\.google\.com\//
 const IMAGE = /\.(jpe?g|png|gif|webp|heic|bmp)$/i
 const fileAttId = (url) => `pms-f-${createHash('sha1').update(url).digest('hex').slice(0, 16)}`
@@ -137,6 +150,13 @@ export function issueFrom(fields) {
     // the files added when the ticket was raised (Google Drive links only)
     links: filesFrom(o.links),
     assigneeUids: [...new Set(Array.isArray(o.assigneeUids) ? o.assigneeUids.filter((u) => typeof u === 'string' && UID.test(u)) : [])].slice(0, 20),
+    // 19 Nov 2026: Date, Deadline, and what was done (Customer tickets completed in the PMS)
+    reportDate: dayOf(o.reportDate), deadline: dayOf(o.deadline),
+    completion: o.completion && typeof o.completion === 'object' && dayOf(o.completion.actionDate)
+      ? { actionDate: o.completion.actionDate, solution: str(o.completion.solution, 1000), fixedByName: str(o.completion.fixedByName, 80),
+          completedByUid: typeof o.completion.completedByUid === 'string' && UID.test(o.completion.completedByUid) ? o.completion.completedByUid : '',
+          completedByName: str(o.completion.completedByName, 80) }
+      : null,
   }
 }
 
@@ -244,7 +264,7 @@ async function createFor(db, FieldValue, me, id, issue, hintId) {
     title, description: issue.body, category: '', departmentId, priority: 'medium',
     assignedTo, subtasks: [], labels: ['PMS', id, issue.unit].filter(Boolean),
     attachments: withFiles([], ticketFiles(issue), me)?.list ?? [],
-    startDate: null, dueDate: null, estimatedHours: null, completedAt: column.isDone ? now : null,
+    startDate: issue.startTs ?? null, dueDate: issue.dueTs ?? null, estimatedHours: null, completedAt: column.isDone ? now : null,
     pmsLink: { type: ISSUE_LINK_TYPE, id }, pmsKey: issueKey(id), source: 'pms',
     createdBy: me.uid, createdByName: me.name, createdAt: now, updatedAt: now, activitySeq: 1,
   })
@@ -319,6 +339,10 @@ async function updateFor(db, FieldValue, me, id, issue, snap) {
 
   if (!t.departmentId) changes.departmentId = (await maintenanceDepartment(db)) || issueDepartment(issue.tags)
 
+  // 19 Nov 2026: start date = the ticket's Date, due date = its Deadline (a ticket without one leaves the card's date alone)
+  if (issue.startTs && !sameTs(issue.startTs, t.startDate)) { changes.startDate = issue.startTs; logs.push(['updated', `start date synced from ${id} in the PMS`]) }
+  if (issue.dueTs && !sameTs(issue.dueTs, t.dueDate)) { changes.dueDate = issue.dueTs; logs.push(['updated', `deadline synced from ${id} in the PMS`]) }
+
   // 18 Nov 2026: Assigned to follows the ticket's raiser + People (assigneeUids)
   const assignedTo = await assigneesFor(db, FieldValue, me, peopleOf(issue))
   if (!sameList(assignedTo, t.assignedTo || [])) {
@@ -351,6 +375,8 @@ export async function syncIssue(me, data) {
   const fields = await readPmsDoc(`issues/${id}`, me.idToken)
   if (!fields) throw new HttpError(404, `No ticket ${id}, or you cannot see it in the PMS`)
   const issue = issueFrom(fields)
+  issue.startTs = dayTs(issue.reportDate, Timestamp)
+  issue.dueTs = dayTs(issue.deadline, Timestamp)
   if (issue.type === 'customer' && issue.status !== 'deleted') issue.replies = await pmsReplies(id, me)
   const snap = await db.collection('tasks').doc(issueTaskId(id)).get()
   const out = snap.exists ? await updateFor(db, FieldValue, me, id, issue, snap) : await createFor(db, FieldValue, me, id, issue, text(data.boardId, 100))
@@ -358,6 +384,16 @@ export async function syncIssue(me, data) {
   if (out?.taskId && !out.deleted && issue.replies?.length) {
     const added = await syncComments(db, Timestamp, FieldValue, out.taskId, issue.replies)
     if (added) { out.commentsAdded = added; delete out.unchanged }
+  }
+  // 19 Nov 2026: a completed Customer ticket adds one comment with its action date, solution and who fixed it (no cost)
+  if (out?.taskId && !out.deleted && issue.status === 'done' && issue.completion) {
+    const ref = db.collection(`tasks/${out.taskId}/comments`).doc(completionId(issue.completion))
+    if (!(await ref.get()).exists) {
+      const c = issue.completion
+      await ref.set({ text: completionText(c).slice(0, 2000), userId: c.completedByUid, userName: `${c.completedByName || 'PMS user'} (PMS)`,
+        createdAt: FieldValue.serverTimestamp(), pmsCompletion: true })
+      out.completionComment = true; delete out.unchanged
+    }
   }
   return out
 }

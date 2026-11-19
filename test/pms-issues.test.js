@@ -353,3 +353,43 @@ test('the ticket comments are copied to the card once, oldest first, with who wr
   r = await sync('tok-ops', 'IS-0001')
   assert.equal(r.body.commentsAdded, 1)
 })
+
+// 19 Nov 2026: the ticket's Date and Deadline are the card's start and due dates; a completed ticket adds one comment
+test('Date and Deadline become the start and due dates; a change in the PMS follows; none leaves the card alone', async () => {
+  Object.assign(ISSUES['IS-0001'], { reportDate: '2026-11-18', deadline: '2026-11-21' })
+  let r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(task('IS-0001').startDate.toDate().toISOString(), '2026-11-17T16:00:00.000Z') // midnight Malaysia time
+  assert.equal(task('IS-0001').dueDate.toDate().toISOString(), '2026-11-20T16:00:00.000Z')
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.body.unchanged, true)
+  ISSUES['IS-0001'].deadline = '2026-11-25'
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(task('IS-0001').dueDate.toDate().toISOString(), '2026-11-24T16:00:00.000Z')
+  // an older ticket with no Date or Deadline: dates set in the TMS stay
+  ISSUES['IS-0005'] = { ...ISSUES['IS-0001'], reportDate: undefined, deadline: undefined }
+  r = await sync('tok-ops', 'IS-0005')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(task('IS-0005').dueDate, null)
+  db.store['tasks/issue-IS-0005'].dueDate = ts(new Date('2026-12-01T00:00:00Z'))
+  ISSUES['IS-0005'].title = 'Aircond (changed)'
+  await sync('tok-ops', 'IS-0005')
+  assert.equal(task('IS-0005').dueDate.toDate().toISOString(), '2026-12-01T00:00:00.000Z')
+})
+
+test('a completed ticket adds one comment with the action date, solution and who fixed it (no cost)', async () => {
+  let r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  Object.assign(ISSUES['IS-0001'], { status: 'done', completion: { actionDate: '2026-11-18', solution: 'Replaced pipe', fixedByName: 'Max Maintenance', cost: '40', completedByUid: 'opsUid', completedByName: 'Omar Ops' } })
+  r = await sync('tok-ops', 'IS-0001')
+  assert.equal(r.code, 200, JSON.stringify(r.body))
+  assert.equal(r.body.completionComment, true)
+  const done = Object.entries(db.store).filter(([k]) => k.startsWith('tasks/issue-IS-0001/comments/pms-done-'))
+  assert.equal(done.length, 1)
+  assert.equal(done[0][1].text, 'Completed. Action date: 18 Nov 2026.\nSolution: Replaced pipe\nFixed by: Max Maintenance.')
+  assert.equal(done[0][1].userName, 'Omar Ops (PMS)')
+  assert.ok(!done[0][1].text.includes('40'))
+  r = await sync('tok-ops', 'IS-0001') // again: not added twice
+  assert.equal(r.body.completionComment, undefined)
+  assert.equal(Object.keys(db.store).filter((k) => k.startsWith('tasks/issue-IS-0001/comments/pms-done-')).length, 1)
+})
