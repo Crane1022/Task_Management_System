@@ -43,6 +43,11 @@ The five original cats are in the library as "Original cats". They use the same 
 - It reacts to the app: it cheers when a card is dropped into a column marked "counts as completed" (or its status is changed
   to one), encourages when a task is created, looks around when the board changes.
 - It falls asleep after a minute without clicks or keys, and wakes on the next one.
+- **Easter egg (20 Nov 2026):** after 45 seconds with no mouse movement, clicks, keys or scrolling, it has a 12-second
+  party: either a neon dance ("Neon and beyond~", glowing colours, a dance floor and sparkles) or a song (swaying, music
+  notes floating up). With animal sounds on, it plays its own little tune. Coming back interrupts it ("Oops, you saw that?").
+  Once per quiet spell; it then falls asleep as before. Only when the tab is in view, animations are on and motion is not
+  reduced. Setting: Behaviour > "Little surprise…" (on by default). Preview it with the Dance and Sing buttons.
 - Sounds are made with the browser's audio (no sound files), **off by default**, with a volume slider.
 - It is `aria-hidden`, never takes keyboard focus, and its layer is click-through everywhere except the pet itself. It sits at
   z-index 25: above the page, below menus (30), the mobile drawer (40) and dialogs (50+).
@@ -90,6 +95,8 @@ jsdom has no layout, real pointer capture, touch, audio or animation, so please 
 5. **Windows**: resize the browser smaller and larger; the pet should never be lost off-screen.
 6. **Two devices**: choose an animal on one and sign in on the other (it follows); upload a picture on one (it does not).
 7. **Reduced motion**: turn on your system's reduce-motion setting; nothing should move.
+8. **Idle party**: leave the mouse and keyboard alone for 45 seconds; the pet dances or sings, then sleeps at one minute.
+   Move the mouse during the party: it stops at once (and the tune too).
 
 ## Limits
 

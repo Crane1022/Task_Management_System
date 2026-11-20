@@ -6,8 +6,8 @@ import { useCompanionStore } from '@/stores/companion'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { fitSize, toPixels, toShare, dragTo, isDrag } from '@/companions/position'
-import { pickMessage, greetingFor, shouldSleep, SLEEP_AFTER_MS } from '@/companions/behaviour'
-import { playVoice } from '@/companions/sound'
+import { pickMessage, greetingFor, shouldSleep, SLEEP_AFTER_MS, PARTY_AFTER_MS, PARTY_MS, pickParty, pickPartyLine, partyAllowed } from '@/companions/behaviour'
+import { playVoice, playTune, stopTune } from '@/companions/sound'
 import CompanionAvatar from './CompanionAvatar.vue'
 
 // The person's pet, floating above the page. Drag it anywhere; it remembers where. It never takes keyboard focus,
@@ -38,10 +38,11 @@ const hover = ref(false)
 const showTools = ref(false)
 const bubble = ref('')
 const confetti = ref(false)
-const state = computed(() => (asleep.value ? 'sleep' : fx.value || (hover.value ? 'happy' : 'idle')))
+const party = ref('') // easter egg: '' | 'dance' | 'sing' while nobody is around
+const state = computed(() => (asleep.value ? 'sleep' : fx.value || party.value || (hover.value ? 'happy' : 'idle')))
 const timers = new Set()
 const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn() }, ms); timers.add(t); return t }
-let sleepTimer, lookTimer, bubbleTimer, fxTimer
+let sleepTimer, lookTimer, bubbleTimer, fxTimer, partyTimer, partyEndTimer
 
 function say(text, ms = 3200) {
   bubble.value = text
@@ -54,9 +55,32 @@ function effect(name, ms) {
   fxTimer = later(() => (fx.value = ''), ms)
 }
 function wake() {
+  stopParty(true)
   asleep.value = false
   clearTimeout(sleepTimer)
+  clearTimeout(partyTimer)
   if (s.value.behaviour.sleep && animated.value) sleepTimer = later(() => { asleep.value = shouldSleep(SLEEP_AFTER_MS, true); if (asleep.value) say('zZz…', 2500) }, SLEEP_AFTER_MS)
+  partyTimer = later(startParty, PARTY_AFTER_MS)
+}
+
+// ----- easter egg (20 Nov 2026): left alone for a while, the pet has a little dance ("Neon and beyond~") or sings,
+// with its own tune when animal sounds are on. Once per quiet spell; it then falls asleep as before.
+function startParty() {
+  if (!partyAllowed(s.value, animated.value, document.hidden) || asleep.value || dragging.value) return
+  const kind = pickParty()
+  party.value = kind
+  say(pickPartyLine(kind), PARTY_MS)
+  if (s.value.behaviour.sounds) playTune(kind, s.value.behaviour.volume)
+  clearTimeout(partyEndTimer)
+  partyEndTimer = later(() => { party.value = ''; stopTune() }, PARTY_MS)
+}
+// caught: the person is back (moved the mouse, clicked, typed, scrolled)
+function stopParty(caught) {
+  if (!party.value) return
+  party.value = ''
+  stopTune()
+  clearTimeout(partyEndTimer)
+  if (caught) say(pickMessage('caught'), 2200)
 }
 function scheduleLook() {
   clearTimeout(lookTimer)
@@ -117,10 +141,23 @@ function leave() { hover.value = false; later(() => { if (!hover.value && !bubbl
 // ----- window size, activity, greeting -----
 let raf = 0
 const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { vw.value = window.innerWidth; vh.value = window.innerHeight }) }
+// moving the mouse or scrolling also counts as being here (checked at most once a second, so it stays cheap)
+let lastNudge = 0
+function nudge() {
+  const now = Date.now()
+  if (now - lastNudge < 1000) return
+  lastNudge = now
+  wake()
+}
+// switching to another tab: stop the party quietly (no one is watching)
+const onVisibility = () => { if (document.hidden) stopParty(false) }
 onMounted(() => {
   window.addEventListener('resize', onResize)
   window.addEventListener('pointerdown', wake, { passive: true })
   window.addEventListener('keydown', wake, { passive: true })
+  window.addEventListener('pointermove', nudge, { passive: true })
+  window.addEventListener('wheel', nudge, { passive: true })
+  document.addEventListener('visibilitychange', onVisibility)
   mq.addEventListener('change', onMq)
   wake(); scheduleLook()
   // say hello once per browser session
@@ -133,7 +170,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   window.removeEventListener('pointerdown', wake)
   window.removeEventListener('keydown', wake)
+  window.removeEventListener('pointermove', nudge)
+  window.removeEventListener('wheel', nudge)
+  document.removeEventListener('visibilitychange', onVisibility)
   mq.removeEventListener('change', onMq)
+  stopTune()
   cancelAnimationFrame(raf)
   timers.forEach(clearTimeout)
 })
