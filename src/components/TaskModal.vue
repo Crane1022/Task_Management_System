@@ -94,7 +94,12 @@ watch(destValue, async (v) => {
   statusColumns.value = cols
   form.value.columnId = cols[0]?.id ?? ''
 })
-if (pickDestination) props.loadColumns(destValue.value).then((cols) => { statusColumns.value = cols.filter((c) => !c.archived); form.value.columnId = statusColumns.value[0]?.id ?? '' })
+if (pickDestination) props.loadColumns(destValue.value).then((cols) => {
+  const wasClean = !dirty.value
+  statusColumns.value = cols.filter((c) => !c.archived)
+  form.value.columnId = statusColumns.value[0]?.id ?? ''
+  if (wasClean) baseline.value = snapshot() // the app filled in the status, not the person: still nothing to lose
+})
 
 // A new task on a Maintenance board is raised as a PMS ticket: the PMS "Raise a ticket" fields are shown too
 const ticketBoard = computed(() => (t ? null : props.ticketBoardFor(destValue.value)))
@@ -108,9 +113,57 @@ function ticketError() {
   return ''
 }
 
-onMounted(() => document.addEventListener('keydown', onKey))
-onUnmounted(() => document.removeEventListener('keydown', onKey))
-const onKey = (e) => e.key === 'Escape' && !confirmDelete.value && emit('close')
+// ---- 20 Nov 2026: "Leave without saving?" ----
+// A copy of everything the person can change is taken when the panel opens. Closing the panel (clicking outside,
+// X, Cancel or Esc) with anything different asks first; with nothing changed it closes straight away.
+// Save / Create never ask, and view-only people never see it.
+function snapshot() {
+  const k = ticket.value
+  return JSON.stringify({
+    form: form.value,
+    newSub: newSub.value.trim(),
+    dest: destValue.value,
+    ticket: ticketBoard.value ? { unit: k.unit, unitText: k.unitText, tags: k.tags, links: k.links } : null,
+  })
+}
+const baseline = ref(snapshot())
+const dirty = computed(() => !props.readonly && snapshot() !== baseline.value)
+const confirmLeave = ref(false)
+
+function requestClose() {
+  if (confirmLeave.value || confirmDelete.value) return
+  if (dirty.value) confirmLeave.value = true
+  else emit('close')
+}
+function leaveWithoutSaving() {
+  confirmLeave.value = false
+  emit('close')
+}
+
+// Close on the backdrop only when the click started AND ended on it, so selecting text in the panel and letting go
+// of the mouse outside it does not count as "clicking outside"
+let downOnBackdrop = false
+const onBackdropDown = (e) => { downOnBackdrop = e.target === e.currentTarget }
+function onBackdropClick(e) {
+  if (downOnBackdrop && e.target === e.currentTarget) requestClose()
+  downOnBackdrop = false
+}
+
+// Esc: closes an open question first (= keep editing), otherwise tries to close the panel
+function onKey(e) {
+  if (e.key !== 'Escape') return
+  if (confirmLeave.value) confirmLeave.value = false
+  else if (confirmDelete.value) confirmDelete.value = false
+  else requestClose()
+}
+// Refreshing or closing the browser tab with unsaved changes: the browser's own "Leave site?" question
+function onBeforeUnload(e) {
+  if (!dirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+onMounted(() => { document.addEventListener('keydown', onKey); window.addEventListener('beforeunload', onBeforeUnload) })
+onUnmounted(() => { document.removeEventListener('keydown', onKey); window.removeEventListener('beforeunload', onBeforeUnload) })
 
 const userList = computed(() => Object.values(props.users).sort((a, b) => a.name.localeCompare(b.name)))
 const done = computed(() => form.value.subtasks.filter((s) => s.done).length)
@@ -168,11 +221,11 @@ function submit() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex justify-end bg-black/40" @click.self="emit('close')">
-    <form class="slide-panel flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
+  <div class="fixed inset-0 z-50 flex justify-end bg-black/40" @mousedown="onBackdropDown" @click="onBackdropClick">
+    <form class="task-panel flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
       <header class="flex items-center justify-between border-b border-line px-5 py-3">
         <h2 class="text-base font-extrabold">{{ t ? 'Task details' : 'New task' }}</h2>
-        <button type="button" class="rounded p-1 text-muted hover:bg-bg" aria-label="Close" @click="emit('close')"><X class="h-5 w-5" /></button>
+        <button type="button" class="rounded p-1 text-muted hover:bg-bg" aria-label="Close" @click="requestClose"><X class="h-5 w-5" /></button>
       </header>
 
       <fieldset :disabled="readonly" class="min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -269,16 +322,21 @@ function submit() {
         <button v-if="t && mayDelete" type="button" class="btn-ghost text-red-600" @click="confirmDelete = true"><Trash2 class="h-4 w-4" />Delete</button>
         <span v-else />
         <div class="flex gap-2">
-          <button type="button" class="btn-ghost" @click="emit('close')">Cancel</button>
+          <button type="button" class="btn-ghost" @click="requestClose">Cancel</button>
           <button v-if="!readonly" class="btn-primary">{{ t ? 'Save changes' : ticketBoard ? 'Raise ticket' : 'Create task' }}</button>
         </div>
       </footer>
     </form>
 
+    <Transition name="confirm" type="transition">
     <ConfirmDialog v-if="confirmDelete && ticketCard" :title="`Delete ticket ${t.pmsLink.id}?`"
       :message="`This removes the card here and deletes ${t.pmsLink.id} in the PMS too. The PMS keeps the ticket, marked deleted with your reason.`"
       reason-label="Reason for deleting" @cancel="confirmDelete = false" @confirm="(reason) => emit('delete', reason)" />
     <ConfirmDialog v-else-if="confirmDelete" title="Delete this task?" message="This permanently removes the task for everyone. This cannot be undone."
       @cancel="confirmDelete = false" @confirm="emit('delete')" />
+    <ConfirmDialog v-else-if="confirmLeave" title="Leave without saving?"
+      :message="t ? 'You have changes in this task that are not saved. If you leave now, they will be lost.' : 'This new task has not been created yet. If you leave now, what you typed will be lost.'"
+      confirm-text="Leave" cancel-text="Keep editing" @cancel="confirmLeave = false" @confirm="leaveWithoutSaving" />
+    </Transition>
   </div>
 </template>

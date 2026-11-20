@@ -22,12 +22,15 @@ const destinations = computed(() => (board.aggregate || task.value ? board.desti
 </script>
 
 <template>
+  <!-- the panel slides in from the right and slides back out when it closes (motion.css: task-panel) -->
+  <Transition name="task-panel" :duration="{ enter: 360, leave: 260 }">
   <TaskModal
-    v-if="editor.modal" :task="task" :live-task="live" :columns="columns" :users="board.users"
+    v-if="editor.modal" :key="task?.id ?? 'new'" :task="task" :live-task="live" :columns="columns" :users="board.users"
     :default-column-id="editor.modal.columnId" :default-department="auth.profile.departmentId"
     :can-delete="canDelete" :can-moderate="role === 'admin'" :readonly="readonly"
     :board-label="task ? board.boardLabelOf(task) : ''" :destinations="destinations" :current-board-id="board.boardId" :load-columns="board.loadColumnsFor"
     :ticket-board-for="board.ticketBoardFor" :profile="auth.profile"
     @close="editor.close()" @create="editor.create" @save="editor.save" @delete="editor.remove" @move="editor.move"
   />
+  </Transition>
 </template>

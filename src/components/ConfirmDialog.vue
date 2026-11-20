@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 // reasonLabel: also ask for a reason (required); it is passed to `confirm`
-const props = defineProps({ title: String, message: String, confirmText: { type: String, default: 'Delete' }, reasonLabel: { type: String, default: '' } })
+const props = defineProps({ title: String, message: String, confirmText: { type: String, default: 'Delete' }, cancelText: { type: String, default: 'Cancel' }, reasonLabel: { type: String, default: '' } })
 const emit = defineEmits(['confirm', 'cancel'])
 const reason = ref('')
 const error = ref('')
@@ -23,7 +23,7 @@ function confirm() {
         <p v-if="error" class="mt-1 text-xs font-semibold text-red-600" role="alert">{{ error }}</p>
       </div>
       <div class="mt-5 flex justify-end gap-2">
-        <button class="btn-ghost" @click="$emit('cancel')">Cancel</button>
+        <button class="btn-ghost" @click="$emit('cancel')">{{ cancelText }}</button>
         <button class="btn-danger" @click="confirm">{{ confirmText }}</button>
       </div>
     </div>

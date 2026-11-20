@@ -306,12 +306,15 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
     </div>
 
     <!-- apply / cancel / reset -->
-    <div class="sticky bottom-0 z-10 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
-        <span class="mr-auto text-xs font-semibold text-muted">{{ dirty ? 'You have changes that are not applied yet.' : 'Everything is saved.' }}</span>
-        <button class="btn-ghost" :disabled="!dirty || saving" @click="cancel">Cancel</button>
-        <button class="btn-ghost" :disabled="saving" @click="confirmAll = true">Reset to default</button>
-        <button class="btn-primary" :disabled="!dirty || saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
+    <!-- 20 Nov 2026: no bar behind them any more, just the buttons, kept at the bottom right while you scroll.
+         The wrapper lets clicks through to the page; only the buttons take them. -->
+    <div class="pointer-events-none sticky bottom-0 z-10 px-4 py-4">
+      <div class="mx-auto flex max-w-6xl justify-end">
+        <div class="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+          <button class="btn-ghost shadow-lg" :disabled="!dirty || saving" @click="cancel">Cancel</button>
+          <button class="btn-ghost shadow-lg" :disabled="saving" @click="confirmAll = true">Reset to default</button>
+          <button class="btn-primary shadow-lg" :disabled="!dirty || saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
+        </div>
       </div>
     </div>
 

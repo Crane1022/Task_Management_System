@@ -64,7 +64,7 @@ html { scroll-behavior: smooth; }
 main > * { animation: rise 0.32s var(--ease) backwards; }
 /* pop-ups: the dark backdrop fades in and the box rises */
 .fixed.inset-0[class*='bg-black'] { animation: fade 0.2s ease-out backwards; }
-[role='dialog'] { animation: pop 0.26s var(--ease) backwards; }
+[role='dialog'], [role='alertdialog'] { animation: pop 0.26s var(--ease) backwards; }
 .slide-panel { animation: slide-in 0.3s var(--ease) backwards; }
 /* menus and the nested workspace links open downward */
 [role='menu'], .reveal { animation: drop-in 0.18s var(--ease) backwards; transform-origin: top; }
