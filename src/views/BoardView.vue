@@ -65,11 +65,18 @@ async function onColumnDrop() {
   board.moveColumn(colList.value.map((c) => c.id))
 }
 
+const addingColumn = ref(false)
 async function addColumn() {
   const n = newColumn.value.trim()
-  if (!n) return
-  await board.addColumn(n)
-  newColumn.value = ''
+  if (!n || addingColumn.value) return
+  addingColumn.value = true
+  try { await board.addColumn(n); newColumn.value = '' } finally { addingColumn.value = false }
+}
+const seeding = ref(false)
+async function seedColumns() {
+  if (seeding.value) return
+  seeding.value = true
+  try { await board.seedColumns() } finally { seeding.value = false }
 }
 function updateColumn(column, changes) {
   // Switching "counts as completed" does not change tasks that are already in the column, so warn first.
@@ -138,7 +145,7 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
         <h2 class="text-base font-extrabold">This board has no columns yet</h2>
         <template v-if="board.canManage">
           <p class="mt-1 text-sm text-muted">Start with the standard set: NEW PROJECT, TODO, DOING, REVIEW and DONE.</p>
-          <button class="btn-primary mt-4" @click="board.seedColumns()">Create default columns</button>
+          <button v-busy="seeding" class="btn-primary mt-4" @click="seedColumns">{{ seeding ? 'Creating…' : 'Create default columns' }}</button>
         </template>
         <p v-else class="mt-1 text-sm text-muted">Ask a Director or Department Manager to set up the board.</p>
       </div>
@@ -164,7 +171,7 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
           <label class="label" for="new-col">Add a column</label>
           <div class="flex gap-2">
             <input id="new-col" v-model="newColumn" class="input" placeholder="e.g. BLOCKED" />
-            <button class="btn-primary px-2.5" aria-label="Add column"><Plus class="h-4 w-4" /></button>
+            <button v-busy="addingColumn" class="btn-primary px-2.5" aria-label="Add column"><Plus class="h-4 w-4" /></button>
           </div>
         </form>
       </div>

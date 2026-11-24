@@ -132,7 +132,7 @@ async function removeGroup() {
           <div class="flex flex-wrap items-center justify-end gap-2">
             <button v-if="panel === 'manage'" type="button" class="btn-ghost mr-auto text-xs text-red-600" @click="confirmDelete = true">Delete group</button>
             <button type="button" class="btn-ghost text-xs" @click="panel = ''">Cancel</button>
-            <button type="button" class="btn-primary text-xs" :disabled="busy" @click="panel === 'group' ? makeGroup() : saveGroup()">{{ panel === 'group' ? 'Create group' : 'Save' }}</button>
+            <button type="button" v-busy="busy" class="btn-primary text-xs" @click="panel === 'group' ? makeGroup() : saveGroup()">{{ panel === 'group' ? 'Create group' : 'Save' }}</button>
           </div>
         </template>
       </div>

@@ -135,3 +135,39 @@ test('behaviour helpers', () => {
   assert.equal(shouldSleep(SLEEP_AFTER_MS * 5, false), false)
   assert.equal(greetingFor(getAnimal('dog'), 'Rex', 'Ana'), 'woof! Hi Ana!')
 })
+
+// ----- easter egg: the idle party (20 Nov 2026) -----
+import { PARTY_AFTER_MS, PARTY_MS, PARTY_LINES, pickParty, pickPartyLine, partyAllowed } from '../src/companions/behaviour.js'
+import { tuneNotes } from '../src/companions/sound.js'
+
+test('idle party: on by default, cleaned when loaded, and ends before the pet falls asleep', () => {
+  assert.equal(defaultSettings().behaviour.idleParty, true)
+  assert.equal(normalizeSettings({ behaviour: { idleParty: 'yes' } }).behaviour.idleParty, true)
+  assert.equal(normalizeSettings({ behaviour: { idleParty: false } }).behaviour.idleParty, false)
+  assert.ok(PARTY_AFTER_MS + PARTY_MS < SLEEP_AFTER_MS)
+})
+
+test('idle party: dance or sing, with a line to say', () => {
+  assert.equal(pickParty(() => 0), 'dance')
+  assert.equal(pickParty(() => 0.99), 'sing')
+  assert.match(pickPartyLine('dance', () => 0), /Neon and beyond/)
+  assert.ok(PARTY_LINES.sing.includes(pickPartyLine('sing', () => 0.5)))
+})
+
+test('idle party: only when shown, animated, switched on and the tab is in view', () => {
+  const s = defaultSettings()
+  assert.equal(partyAllowed(s, true, false), true)
+  assert.equal(partyAllowed(s, false, false), false)
+  assert.equal(partyAllowed(s, true, true), false)
+  assert.equal(partyAllowed({ ...s, visible: false }, true, false), false)
+  assert.equal(partyAllowed({ ...s, behaviour: { ...s.behaviour, idleParty: false } }, true, false), false)
+})
+
+test('idle party tunes: notes in order, silent at volume 0', () => {
+  const dance = tuneNotes('dance', 50)
+  assert.ok(dance.length > 8)
+  assert.ok(dance.every((n, i) => i === 0 || n.start > dance[i - 1].start))
+  assert.ok(dance.every((n) => n.gain > 0 && n.gain <= 0.25))
+  assert.deepEqual(tuneNotes('sing', 0), [])
+  assert.deepEqual(tuneNotes('nope', 50), [])
+})

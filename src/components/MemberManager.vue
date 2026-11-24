@@ -33,9 +33,12 @@ const shown = computed(() => {
   const s = search.value.trim().toLowerCase()
   return candidates.value.filter((u) => !s || `${displayOf(u)} ${u.email ?? ''}`.toLowerCase().includes(s))
 })
+const adding = ref(false)
 async function add() {
-  if (!pick.value) return
-  if (await store.addMembers(props.workspace, { [pick.value]: pickRole.value })) pick.value = ''
+  if (!pick.value || adding.value) return
+  adding.value = true
+  try { if (await store.addMembers(props.workspace, { [pick.value]: pickRole.value })) pick.value = '' }
+  finally { adding.value = false }
 }
 
 const confirmAll = ref(false)
@@ -61,7 +64,7 @@ async function confirmRemove() { await store.kick(props.workspace, remove.value.
           <select id="m-pick" v-model="pick" class="input"><option value="">Choose…</option><option v-for="u in shown" :key="u.id" :value="u.id">{{ displayOf(u) }}{{ u.email ? ` (${u.email})` : '' }}{{ u.stub ? ' (not signed in yet)' : '' }}</option></select></div>
         <div><label class="label" for="m-role">Role</label>
           <select id="m-role" v-model="pickRole" class="input w-32"><option v-for="r in WORKSPACE_ROLES" :key="r.id" :value="r.id">{{ r.name }}</option></select></div>
-        <button class="btn-primary" :disabled="!pick" @click="add"><UserPlus class="h-4 w-4" />Add</button>
+        <button v-busy="adding" class="btn-primary" :disabled="!pick" @click="add"><UserPlus class="h-4 w-4" />{{ adding ? 'Adding…' : 'Add' }}</button>
         <button v-if="candidates.length && !workspace.superPrivate" class="btn-ghost" @click="confirmAll = true"><Users class="h-4 w-4" />Add everyone ({{ candidates.length }})</button>
       </div>
     </div>

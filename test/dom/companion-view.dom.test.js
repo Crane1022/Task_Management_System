@@ -52,7 +52,7 @@ describe('My companion page', () => {
   it('starts on the current companion, and Apply is disabled until something changes', async () => {
     await open()
     expect(button('Apply changes').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('Everything is saved.')
+    expect(button('Cancel').attributes('disabled')).toBeDefined() // the bottom bar is just the buttons now (20 Nov 2026)
     expect(wrapper.text()).toContain('24 animals')
     expect(wrapper.find('button[aria-label="Preview Fox"]').exists()).toBe(true)
   })

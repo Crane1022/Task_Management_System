@@ -20,7 +20,7 @@ export const defaultSettings = () => ({
   recents: [],
   custom: { hasImage: false, stamp: 0 }, // the uploaded character's picture itself stays on this device
   face: { hasImage: false, stamp: 0, zoom: 1, x: 0, y: 0 },
-  behaviour: { animations: true, sounds: false, volume: 40, taskReactions: true, greeting: true, sleep: true, peekCats: true },
+  behaviour: { animations: true, sounds: false, volume: 40, taskReactions: true, greeting: true, sleep: true, peekCats: true, idleParty: false },
 })
 
 const HEX = /^#[0-9a-f]{6}$/i
@@ -56,6 +56,7 @@ export function normalizeSettings(raw) {
     behaviour: {
       animations: bool(b.animations, true), sounds: bool(b.sounds, false), volume: Math.round(num(b.volume, 0, 100, 40)),
       taskReactions: bool(b.taskReactions, true), greeting: bool(b.greeting, true), sleep: bool(b.sleep, true), peekCats: bool(b.peekCats, true),
+      idleParty: bool(b.idleParty, false), // 24 Nov 2026: off unless the person ticks it
     },
   }
 }

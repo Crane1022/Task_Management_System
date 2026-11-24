@@ -10,7 +10,7 @@ import {
 } from '@/companions/settings'
 import { ACCESSORIES } from '@/companions/accessories'
 import { ACCEPT, validateFile } from '@/companions/imageValidate'
-import { playVoice } from '@/companions/sound'
+import { playVoice, playTune, stopTune } from '@/companions/sound'
 import CompanionAvatar from '@/components/CompanionAvatar.vue'
 import AnimalLibrary from '@/components/AnimalLibrary.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
@@ -69,7 +69,12 @@ const animated = computed(() => draft.value.behaviour.animations && !reducedOs &
 const previewState = ref('idle')
 let stateTimer
 function show(state, ms = 1800) { previewState.value = state; clearTimeout(stateTimer); if (ms) stateTimer = setTimeout(() => (previewState.value = 'idle'), ms) }
-onBeforeUnmount(() => clearTimeout(stateTimer))
+// preview the idle party (with its tune when animal sounds are on)
+function party(kind) {
+  show(kind, 5000)
+  if (draft.value.behaviour.sounds) playTune(kind, draft.value.behaviour.volume)
+}
+onBeforeUnmount(() => { clearTimeout(stateTimer); stopTune() })
 
 // ----- choosing -----
 const choose = () => { draft.value = selectAnimal(draft.value, browsing.value); browsing.value = '' }
@@ -248,6 +253,7 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
             <label class="chk"><input v-model="draft.visible" type="checkbox" />Show my companion on the screen <span class="text-xs font-semibold text-muted">(turn off to hide it for now)</span></label>
             <label class="chk"><input v-model="draft.behaviour.animations" type="checkbox" />Animations (blinking, breathing, tail and ear movement, looking around)</label>
             <label class="chk"><input v-model="draft.behaviour.sleep" type="checkbox" />Fall asleep when I have been away for a minute</label>
+            <label class="chk"><input v-model="draft.behaviour.idleParty" type="checkbox" />Little surprise: when I have been away for a while, it dances or sings <span class="text-xs font-semibold text-muted">(with a tune if animal sounds are on)</span></label>
             <label class="chk"><input v-model="draft.behaviour.taskReactions" type="checkbox" />React to my tasks (cheer when I finish one, encourage me when I add one, look around when I change board)</label>
             <label class="chk"><input v-model="draft.behaviour.greeting" type="checkbox" />Say hello when I open the app</label>
             <label class="chk"><input v-model="draft.behaviour.peekCats" type="checkbox" />Show the little cats that peek over cards and columns</label>
@@ -298,6 +304,8 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
               <button class="btn-ghost px-2.5 py-1 text-xs" @click="show('happy')">Pat</button>
               <button class="btn-ghost px-2.5 py-1 text-xs" @click="show('celebrate', 2000)">Celebrate</button>
               <button class="btn-ghost px-2.5 py-1 text-xs" @click="show('sleep', 0)">Sleep</button>
+              <button class="btn-ghost px-2.5 py-1 text-xs" @click="party('dance')">Dance</button>
+              <button class="btn-ghost px-2.5 py-1 text-xs" @click="party('sing')">Sing</button>
               <button class="btn-ghost px-2.5 py-1 text-xs" @click="show('idle', 0)">Wake</button>
             </div>
           </div>
@@ -306,12 +314,15 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
     </div>
 
     <!-- apply / cancel / reset -->
-    <div class="sticky bottom-0 z-10 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
-        <span class="mr-auto text-xs font-semibold text-muted">{{ dirty ? 'You have changes that are not applied yet.' : 'Everything is saved.' }}</span>
-        <button class="btn-ghost" :disabled="!dirty || saving" @click="cancel">Cancel</button>
-        <button class="btn-ghost" :disabled="saving" @click="confirmAll = true">Reset to default</button>
-        <button class="btn-primary" :disabled="!dirty || saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
+    <!-- 20 Nov 2026: no bar behind them any more, just the buttons, kept at the bottom right while you scroll.
+         The wrapper lets clicks through to the page; only the buttons take them. -->
+    <div class="pointer-events-none sticky bottom-0 z-10 px-4 py-4">
+      <div class="mx-auto flex max-w-6xl justify-end">
+        <div class="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+          <button class="btn-ghost shadow-lg" :disabled="!dirty || saving" @click="cancel">Cancel</button>
+          <button class="btn-ghost shadow-lg" :disabled="saving" @click="confirmAll = true">Reset to default</button>
+          <button class="btn-primary shadow-lg" :disabled="!dirty || saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
+        </div>
       </div>
     </div>
 

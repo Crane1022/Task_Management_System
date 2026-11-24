@@ -112,7 +112,7 @@ async function done() {
 
       <div class="mt-5 flex justify-end gap-2">
         <button type="button" class="btn-ghost" @click="emit('cancel')">Cancel</button>
-        <button v-if="!error" type="button" class="btn-primary" :disabled="!ready || busy" @click="done">{{ busy ? 'Preparing…' : confirmText }}</button>
+        <button v-if="!error" type="button" class="btn-primary"  v-busy="busy" :disabled="!ready" @click="done">{{ busy ? 'Preparing…' : confirmText }}</button>
       </div>
     </div>
   </div>

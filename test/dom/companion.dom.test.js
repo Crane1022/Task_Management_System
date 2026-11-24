@@ -141,6 +141,36 @@ describe('the roaming companion', () => {
     expect(wrapper.find('.pet-root').classes()).not.toContain('pet-sleep')
   })
 
+  it('has a little dance or song when left alone, stops when the person is back, then sleeps (easter egg)', async () => {
+    await mountPet()
+    vi.advanceTimersByTime(44_000); await settle()
+    const cls = () => wrapper.find('.pet-root').classes()
+    expect(cls().some((c) => c === 'pet-dance' || c === 'pet-sing')).toBe(false)
+    vi.advanceTimersByTime(1500); await settle()
+    expect(cls().some((c) => c === 'pet-dance' || c === 'pet-sing')).toBe(true)
+    expect(wrapper.find('.pet-neon, .pet-notes').exists()).toBe(true)
+    expect(wrapper.find('.pet-bubble').exists()).toBe(true)
+    vi.advanceTimersByTime(12_500); await settle() // the party is over by itself
+    expect(cls().some((c) => c === 'pet-dance' || c === 'pet-sing')).toBe(false)
+    vi.advanceTimersByTime(4000); await settle()
+    expect(cls()).toContain('pet-sleep') // and then it sleeps, as before
+    // a new quiet spell: the person comes back in the middle of the party
+    window.dispatchEvent(new Event('keydown')); await settle()
+    vi.advanceTimersByTime(46_000); await settle()
+    expect(cls().some((c) => c === 'pet-dance' || c === 'pet-sing')).toBe(true)
+    window.dispatchEvent(new Event('keydown')); await settle()
+    expect(cls().some((c) => c === 'pet-dance' || c === 'pet-sing')).toBe(false)
+    expect(MESSAGES.caught).toContain(wrapper.find('.pet-bubble').text())
+  })
+
+  it('does not party when the surprise is switched off', async () => {
+    const { store } = await mountPet()
+    store.settings = { ...store.settings, behaviour: { ...store.settings.behaviour, idleParty: false } }
+    window.dispatchEvent(new Event('keydown')); await settle()
+    vi.advanceTimersByTime(50_000); await settle()
+    expect(wrapper.find('.pet-root').classes().some((c) => c === 'pet-dance' || c === 'pet-sing')).toBe(false)
+  })
+
   it('does not fall asleep when that is switched off', async () => {
     const { store } = await mountPet()
     store.settings = { ...store.settings, behaviour: { ...store.settings.behaviour, sleep: false } }

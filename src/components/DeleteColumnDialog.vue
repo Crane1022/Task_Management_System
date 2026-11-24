@@ -2,14 +2,22 @@
 import { ref, computed } from 'vue'
 
 // Deleting a column never deletes tasks: with tasks inside, the person must pick where they go.
-const props = defineProps({ column: Object, count: Number, targets: Array })
-const emit = defineEmits(['confirm', 'cancel'])
+// onConfirm: the @confirm handler, awaited so the button can show a spinner (24 Nov 2026)
+const props = defineProps({ column: Object, count: Number, targets: Array, onConfirm: Function })
+const emit = defineEmits(['cancel'])
+const busy = ref(false)
+async function confirm() {
+  if (busy.value) return
+  busy.value = true
+  try { await props.onConfirm?.(target.value) } catch (e) { console.error(e) } finally { busy.value = false }
+}
+const cancel = () => { if (!busy.value) emit('cancel') }
 const target = ref(props.targets[0]?.id ?? '')
 const canConfirm = computed(() => props.count === 0 || !!target.value)
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" @click.self="emit('cancel')">
+  <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" @click.self="cancel">
     <div class="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-xl" role="alertdialog" aria-modal="true">
       <h3 class="text-base font-bold">Delete “{{ column.name }}”?</h3>
       <template v-if="count > 0">
@@ -22,8 +30,8 @@ const canConfirm = computed(() => props.count === 0 || !!target.value)
       </template>
       <p v-else class="mt-1 text-sm text-muted">This column is empty. This cannot be undone.</p>
       <div class="mt-5 flex justify-end gap-2">
-        <button class="btn-ghost" @click="emit('cancel')">Cancel</button>
-        <button class="btn-danger" :disabled="!canConfirm" @click="emit('confirm', target)">{{ count > 0 ? 'Move tasks and delete' : 'Delete' }}</button>
+        <button class="btn-ghost" :disabled="busy" @click="cancel">Cancel</button>
+        <button v-busy="busy" class="btn-danger" :disabled="!canConfirm" @click="confirm">{{ count > 0 ? 'Move tasks and delete' : 'Delete' }}</button>
       </div>
     </div>
   </div>

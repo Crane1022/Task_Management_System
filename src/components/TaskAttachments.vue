@@ -78,7 +78,7 @@ async function remove() {
       <p class="text-[11px] text-muted">Only the link is saved. Make sure the people who need the file have access to it in its own service.</p>
       <div class="flex justify-end gap-2">
         <button type="button" class="btn-ghost py-1" @click="open = false; error = ''">Cancel</button>
-        <button type="button" class="btn-primary py-1" :disabled="busy" @click="add">{{ busy ? 'Adding…' : 'Add attachment' }}</button>
+        <button type="button" v-busy="busy" class="btn-primary py-1" @click="add">{{ busy ? 'Adding…' : 'Add attachment' }}</button>
       </div>
     </div>
     <ConfirmDialog v-if="removing" title="Remove this attachment?" :message="`“${removing.name}” is removed from the task. The file itself is not deleted.`" confirm-text="Remove" @cancel="removing = null" @confirm="remove" />

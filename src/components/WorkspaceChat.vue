@@ -79,13 +79,17 @@ const addEmoji = (e) => {
   text.value = r.text
   requestAnimationFrame(() => { box.value?.focus(); box.value?.setSelectionRange(r.caret, r.caret); syncCaret() })
 }
+const savingSticker = ref(false)
 async function saveSticker() {
+  if (savingSticker.value) return
   const url = stickerUrl(newUrl.value)
   if (!url) { ui.toast('Paste a picture link that starts with https://', 'error'); return }
   if (mine.value.length >= MAX_MY_STICKERS) { ui.toast(`You can keep ${MAX_MY_STICKERS} stickers. Remove one first.`, 'error'); return }
   if (mine.value.some((s) => s.url === url)) { ui.toast('You already saved that sticker'); return }
+  savingSticker.value = true
   try { await addSticker(auth.user.uid, url); newUrl.value = ''; ui.toast('Sticker saved') }
   catch (e) { ui.toast(`Could not save the sticker: ${e.code ?? e.message}`, 'error') }
+  finally { savingSticker.value = false }
 }
 const removeSticker = (s) => deleteSticker(auth.user.uid, s.id).catch((e) => ui.toast(`Could not remove it: ${e.code ?? e.message}`, 'error'))
 
@@ -152,7 +156,7 @@ const broken = ref(new Set())
         </div>
         <form class="mt-2 flex gap-2" @submit.prevent="saveSticker">
           <input v-model="newUrl" class="input flex-1 py-1.5 text-xs" placeholder="Paste a picture link (https://…, or a Google Drive share link)" aria-label="Picture link for a new sticker" />
-          <button type="submit" class="btn-ghost text-xs" :disabled="!newUrl.trim()"><Plus class="h-3.5 w-3.5" />Save</button>
+          <button type="submit" v-busy="savingSticker" class="btn-ghost text-xs" :disabled="!newUrl.trim()"><Plus class="h-3.5 w-3.5" />Save</button>
         </form>
         <p class="mt-1 text-[11px] text-muted">Pictures are not uploaded to the app. Share the picture as “anyone with the link” and paste its link; the link is saved for you.</p>
       </template>
@@ -169,7 +173,7 @@ const broken = ref(new Set())
         </ul>
         <textarea ref="box" v-model="text" rows="1" class="input w-full" :maxlength="MAX" placeholder="Message the team… type @ to tag" aria-label="Write a message" @input="syncCaret" @click="syncCaret" @keyup.left="syncCaret" @keyup.right="syncCaret" @keydown="onKey" />
       </div>
-      <button type="submit" class="btn-primary" :disabled="!text.trim() || busy" aria-label="Send message"><Send class="h-4 w-4" /></button>
+      <button type="submit" v-busy="busy" class="btn-primary" :disabled="!text.trim()" aria-label="Send message"><Send class="h-4 w-4" /></button>
     </form>
   </section>
 </template>
