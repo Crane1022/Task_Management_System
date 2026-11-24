@@ -13,7 +13,7 @@ import { getServices, readPmsDoc, staffFrom, pmsRoleInfo, deptForRole, isCustomR
 
 const UID = /^[A-Za-z0-9_-]{1,128}$/
 // PMS roles that edit staff records there
-export const STAFF_SYNC_ROLES = ['director', 'hr']
+export const STAFF_SYNC_ROLES = ['director', 'branchDirector', 'hr']   // branchDirector: 24 Nov 2026 (they edit staff in their branches)
 const MAX_UIDS = 300
 
 export async function syncStaff(me, data) {

@@ -43,6 +43,7 @@ export const DEFAULT_COLUMNS = ['NEW PROJECT', 'TODO', 'DOING', 'REVIEW', 'DONE'
 // Each person's department follows their PMS role (set at sign-in by api/pms-login.js). Same map as api/_lib/pms.js
 export const DEPT_FOR_PMS_ROLE = {
   director: 'director', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
+  branchDirector: 'director',   // 24 Nov 2026 (Khairul): PMS Branch Directors sit in the Directors' department (same workspace), as employees, not super admins
 }
 // A role made on the PMS Roles page (and the AI Agent, 'ai') is its own department, with the role id as its id
 export const deptForRole = (role) => (role ? DEPT_FOR_PMS_ROLE[role] ?? role : null)

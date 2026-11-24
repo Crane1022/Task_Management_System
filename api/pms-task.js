@@ -38,7 +38,7 @@
 //                                                                                        -> { ok, tasks: [...] }
 import { randomUUID } from 'node:crypto'
 import { addActivities } from './_lib/activity.js'
-import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, deptForRole, departmentExists } from './_lib/pms.js'
+import { getServices, handle, pmsUser, readPmsDoc, staffFrom, bodyOf, text, HttpError, DEPARTMENT_IDS, deptForRole, departmentExists, isDirectorRole } from './_lib/pms.js'
 import { performanceTasks } from './_pms-performance.js'
 import { syncStaff } from './_pms-staff.js'
 import { syncIssue, maintenanceBoards } from './_pms-issues.js'
@@ -55,7 +55,7 @@ const pmsKey = (link) => `${link.type}:${link.id}`
 // PMS roles that may work the tasks of their own department from the PMS without being an assignee
 const DEPT_SYNC_ROLES = ['procurement']
 // PMS roles with a task inbox in the PMS (tasks of their department not yet linked to a PMS record)
-const INBOX_ROLES = ['director', 'procurement']
+const INBOX_ROLES = ['director', 'branchDirector', 'procurement']   // branchDirector: 24 Nov 2026
 const INBOX_LIMIT = 50
 const myDept = (me) => deptForRole(me.role)
 
@@ -91,7 +91,7 @@ async function forwardTo(db, t, name) {
 // ensureAssignees moved to api/_lib/assignees.js (18 Nov 2026), unchanged; the Issues sync uses it too
 
 async function create(me, data) {
-  if (me.role !== 'director') throw new HttpError(403, 'Only Directors create tasks')
+  if (!isDirectorRole(me.role)) throw new HttpError(403, 'Only Directors create tasks')
   const { db, FieldValue, Timestamp } = getServices()
 
   const title = text(data.title, 200)
@@ -149,7 +149,7 @@ async function update(me, taskId, data) {
   const sameDept = DEPT_SYNC_ROLES.includes(me.role) && !!t.departmentId && myDept(me) === t.departmentId
   // A New Owner Listing task moves to Marketing, then Operations, as the listing goes on; Procurement keeps it in sync
   const listingTask = me.role === 'procurement' && t.pmsLink?.type === 'newOwnerListing'
-  if (me.role !== 'director' && !(t.assignedTo || []).includes(me.uid) && !sameDept && !listingTask) throw new HttpError(403, 'Not your task')
+  if (!isDirectorRole(me.role) && !(t.assignedTo || []).includes(me.uid) && !sameDept && !listingTask) throw new HttpError(403, 'Not your task')
 
   const now = FieldValue.serverTimestamp()
   const changes = {}
@@ -260,7 +260,7 @@ async function list(me, data) {
 async function inbox(me, data) {
   if (!INBOX_ROLES.includes(me.role)) throw new HttpError(403, 'No task inbox for this role')
   const { db } = getServices()
-  const departmentId = me.role === 'director' ? (DEPARTMENT_IDS.includes(data.departmentId) ? data.departmentId : 'procurement') : myDept(me)
+  const departmentId = isDirectorRole(me.role) ? (DEPARTMENT_IDS.includes(data.departmentId) ? data.departmentId : 'procurement') : myDept(me)
   // Tasks made on the board have no pmsKey field at all, so the unlinked ones are picked out here, not in the query
   const snap = await db.collection('tasks').where('departmentId', '==', departmentId).limit(500).get()
   const tasks = snap.docs.map((d) => ({ id: d.id, t: d.data() }))
@@ -287,7 +287,7 @@ async function link(me, taskId, data) {
   // Procurement starts a listing from any card of the Owner Leads board, whatever department it was made in
   const leadCard = pmsLink.type === OWNER_LEAD_LINK_TYPE && await isOwnerLeadCard(db, t)
   const ownerLead = me.role === 'procurement' && leadCard
-  if (me.role !== 'director' && !(t.departmentId && myDept(me) === t.departmentId) && !ownerLead) throw new HttpError(403, 'Not a task of your department')
+  if (!isDirectorRole(me.role) && !(t.departmentId && myDept(me) === t.departmentId) && !ownerLead) throw new HttpError(403, 'Not a task of your department')
   const key = pmsKey(pmsLink)
   if (t.pmsKey && t.pmsKey !== key) throw new HttpError(409, `This task is linked to ${t.pmsKey} already`)
   if (t.pmsKey === key) return { ok: true, taskId, pmsKey: key }

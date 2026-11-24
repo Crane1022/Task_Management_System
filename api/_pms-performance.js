@@ -14,7 +14,7 @@
 // Uses the Admin SDK (which skips firestore.rules), so the Super Private exclusion below is the only thing
 // protecting those tasks. Keep it.
 
-import { HttpError } from './_lib/pms.js'
+import { HttpError, isDirectorRole } from './_lib/pms.js'
 
 const DONE_STATUSES = new Set(['done', 'completed', 'complete']);
 const CANCELLED_STATUSES = new Set(['cancelled', 'canceled']);
@@ -39,7 +39,7 @@ function fail(status, message) { throw new HttpError(status, message); }
 // A task counts as completed when it has completedAt: the board sets that when a card goes into a done column
 // (and update() in pms-task.js does the same), so it's the reliable signal whatever the column is called.
 export async function performanceTasks(db, caller, data = {}) {
-  if (caller?.role !== 'director') fail(403, 'Only Directors can read tasks for performance scoring.');
+  if (!isDirectorRole(caller?.role)) fail(403, 'Only Directors can read tasks for performance scoring.');
   const employeeUid = typeof data.employeeUid === 'string' ? data.employeeUid.trim() : '';
   if (!employeeUid || employeeUid.length > 128) fail(400, 'employeeUid is required.');
 

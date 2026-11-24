@@ -171,7 +171,7 @@ export async function deleteInPms(task, reason, profile) {
   signedIn()
   const why = String(reason ?? '').trim().slice(0, 300)
   if (!why) throw new Error('Give a reason for deleting the ticket')
-  if (profile?.pmsRole !== 'director') throw new Error(`Only Directors can delete tickets, and deleting this card deletes ${id} in the PMS`)
+  if (!['director', 'branchDirector'].includes(profile?.pmsRole)) throw new Error(`Only Directors can delete tickets, and deleting this card deletes ${id} in the PMS`)
   const ref = doc(pmsDb, 'issues', id)
   const me = who(profile)
   try {

@@ -55,7 +55,7 @@ const confirmDelete = ref(false)
 // A PMS ticket's card: deleting it deletes the ticket in the PMS too (marked deleted with a reason), which only
 // PMS Directors may do, so only they see Delete on it
 const ticketCard = computed(() => !!t && isIssueTask(t))
-const mayDelete = computed(() => props.canDelete && (!ticketCard.value || props.profile?.pmsRole === 'director'))
+const mayDelete = computed(() => props.canDelete && (!ticketCard.value || ['director', 'branchDirector'].includes(props.profile?.pmsRole)))
 const editingDesc = ref(false)
 const descBox = ref(null)
 function startEditDesc() {

@@ -41,7 +41,7 @@ export const TICKET_TYPES = [
 export const BASE_TICKET_TAGS = ['Director', 'IT', 'Admin', 'HR', 'Finance', 'Operations', 'Procurement', 'Marketing']
 export const tagLabel = (g) => (g === 'Finance' ? 'Accounting' : g) // "Finance" is shown as Accounting in the PMS
 // Which PMS role is notified for a tag (Admin has no sign-in role: Directors cover it)
-export const ROLE_FOR_TAG = { Director: 'director', IT: 'it', Admin: 'director', HR: 'hr', Finance: 'finance', Operations: 'operations', Procurement: 'procurement', Marketing: 'marketing' }
+export const ROLE_FOR_TAG = { Director: 'director', 'Branch Director': 'branchDirector', IT: 'it', Admin: 'director', HR: 'hr', Finance: 'finance', Operations: 'operations', Procurement: 'procurement', Marketing: 'marketing' }
 // Ticket links must be company Google Drive links (as the PMS checks)
 export const DRIVE_HOSTS = ['drive.google.com', 'docs.google.com']
 export const MAX_TICKET_LINKS = 10

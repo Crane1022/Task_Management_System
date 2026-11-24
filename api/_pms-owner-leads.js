@@ -9,7 +9,7 @@
 // (pmsLink { type: 'newOwnerListing', id: 'NL-000n' }) through the existing 'link' action.
 // The workspace and board are found by name; a Super Private workspace (superPrivate: true) is never used.
 import { addActivities } from './_lib/activity.js'
-import { getServices, text, HttpError, pmsDocGone } from './_lib/pms.js'
+import { getServices, text, HttpError, pmsDocGone, isDirectorRole } from './_lib/pms.js'
 import { boardColumns, endPosition, commitOrConflict } from './_lib/board.js'
 
 import {
@@ -19,8 +19,8 @@ import {
 
 export { OWNER_LEAD_LINK_TYPE, leadStatusOfColumn }
 // PMS roles that may read the leads, and move them
-export const LEADS_READ_ROLES = ['director', 'procurement', 'marketing', 'operations']
-export const LEADS_MOVE_ROLES = ['director', 'procurement']
+export const LEADS_READ_ROLES = ['director', 'branchDirector', 'procurement', 'marketing', 'operations']   // branchDirector: 24 Nov 2026
+export const LEADS_MOVE_ROLES = ['director', 'branchDirector', 'procurement']
 const iso = (ts) => ts?.toDate?.().toISOString() ?? null
 
 // The Owner Leads board: { id, name, workspaceId }. 409 with the reason when it can't be found.
@@ -128,7 +128,7 @@ export async function commentOwnerLead(me, taskId, data) {
 // first, then calls this). A card whose listing still exists is refused: it is moved to Cancelled instead.
 //                                                                              -> { ok, taskId, deleted: true }
 export async function deleteOwnerLead(me, taskId) {
-  if (me.role !== 'director') throw new HttpError(403, 'Only Directors delete Owner Leads cards')
+  if (!isDirectorRole(me.role)) throw new HttpError(403, 'Only Directors delete Owner Leads cards')
   if (!taskId || typeof taskId !== 'string' || taskId.includes('/')) throw new HttpError(400, 'taskId is missing')
   const { db } = getServices()
   const board = await ownerLeadsBoard(db)

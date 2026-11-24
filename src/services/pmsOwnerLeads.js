@@ -42,7 +42,7 @@ export async function pushLeadToPms(task, { column = null, title = null, descrip
     cur = { id, ...snap.data() }
   } catch (e) { throw plainError(e, id) }
 
-  const me = { by: profile?.name || displayOf(profile), uid: pmsAuth.currentUser.uid, isDirector: profile?.pmsRole === 'director' }
+  const me = { by: profile?.name || displayOf(profile), uid: pmsAuth.currentUser.uid, isDirector: ['director', 'branchDirector'].includes(profile?.pmsRole) }
   const { changes, line } = leadChanges(cur, column, me, serverTimestamp(), deleteField())
   const lines = line ? [line] : []
   const t = title?.trim().slice(0, 200)

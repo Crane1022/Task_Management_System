@@ -11,13 +11,17 @@ import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { getMessaging } from 'firebase-admin/messaging'
 
 export const PMS_PROJECT = process.env.PMS_PROJECT_ID || 'widebed-pmsdashboard'
-export const PMS_ROLES = ['director', 'finance', 'it', 'hr', 'operations', 'procurement', 'marketing']
+export const PMS_ROLES = ['director', 'branchDirector', 'finance', 'it', 'hr', 'operations', 'procurement', 'marketing']   // branchDirector: 24 Nov 2026
+// PMS Directors and Branch Directors (24 Nov 2026): Branch Directors get the Directors' powers here; the PMS limits them to their branches
+export const DIRECTOR_ROLES = ['director', 'branchDirector']
+export const isDirectorRole = (role) => DIRECTOR_ROLES.includes(role)
 export const TMS_ROLES = ['super_admin', 'dept_manager', 'employee']
 // Same list as src/utils/constants.js DEPARTMENTS (the functions can't import from src/, which uses the browser SDK)
 export const DEPARTMENT_IDS = ['director', 'management', 'hr', 'operation', 'finance', 'marketing', 'it', 'sales', 'procurement']
 // Each person's department follows their PMS role (set at every sign-in). Same map as src/utils/constants.js
 export const DEPT_FOR_PMS_ROLE = {
   director: 'director', finance: 'finance', it: 'it', hr: 'hr', operations: 'operation', procurement: 'procurement', marketing: 'marketing',
+  branchDirector: 'director',   // 24 Nov 2026 (Khairul): PMS Branch Directors sit in the Directors' department (same workspace), as employees, not super admins
 }
 // The PMS AI Agent login (17 Nov 2026): a normal employee here, in its own department 'ai'
 export const AI_ROLE = 'ai'

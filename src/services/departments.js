@@ -7,7 +7,7 @@ import { db, pmsDb } from '@/firebase/config'
 import { collection, getDocs } from '@/firebase/sdk'
 import { setRoleDepartments, isFixedDepartment } from '@/utils/constants'
 
-const BUILTIN_PMS_ROLES = ['director', 'finance', 'it', 'hr', 'operations', 'procurement', 'marketing', 'ai']
+const BUILTIN_PMS_ROLES = ['director', 'branchDirector', 'finance', 'it', 'hr', 'operations', 'procurement', 'marketing', 'ai']
 
 export async function loadDepartments() {
   const [pms, saved] = await Promise.all([

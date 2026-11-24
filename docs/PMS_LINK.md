@@ -99,3 +99,7 @@ Redeploy after changing them. The `VITE_*` values are baked in at build time.
 ## Tests
 
 `npm test` runs `test/pms-api.test.js`. It drives both handlers against an in-memory Firestore and a fake PMS REST API, with no network or project needed.
+
+## Branch Directors (24 Nov 2026)
+
+The PMS role `branchDirector` (Branch Director) is a built-in role here (`PMS_ROLES`, `DIRECTOR_ROLES` in `api/_lib/pms.js`). They sign in as employees (not super admins) in the Directors' department (`director`, the same workspace as the Directors), and get the Directors' powers in the PMS functions: create tasks, Owner Leads read and move, delete Owner Leads cards and ticket cards, performance task reads, staff sync. The PMS limits what they see to their own branches; the TMS has no branches.
