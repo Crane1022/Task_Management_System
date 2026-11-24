@@ -83,6 +83,19 @@ main > * { animation: rise 0.32s var(--ease) backwards; }
 .sync-tick { animation: pop 0.3s var(--ease); }
 .sortable-chosen.task-card, .sortable-drag.task-card { transform: rotate(1.5deg) scale(1.02); box-shadow: 0 14px 30px rgb(0 0 0 / 0.2); cursor: grabbing; }
 .btn:active { transform: scale(0.97); }
+/* loading buttons (24 Nov 2026, v-busy): a spinner takes the place of the icon and the button stays solid
+   (not faded like a disabled button) so it reads as "working", not "not allowed" */
+.btn.is-busy { cursor: progress; opacity: 1 !important; transform: none; }
+.btn.is-busy > svg { display: none; }
+.btn.is-busy::before {
+  content: ''; flex: none; width: 1em; height: 1em; border-radius: 9999px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  animation: btn-spin 0.7s linear infinite !important;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+/* with Reduce motion the spinner turns slowly instead of stopping, so it still says "working" */
+.reduce-motion .btn.is-busy::before { animation-duration: 1.6s !important; }
+@media (prefers-reduced-motion: reduce) { .btn.is-busy::before { animation-duration: 1.6s !important; } }
 .btn { transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), opacity 0.2s var(--ease), transform 0.12s var(--ease); }
 .input { transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background-color 0.2s var(--ease); }
 .input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }

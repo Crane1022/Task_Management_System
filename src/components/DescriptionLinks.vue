@@ -47,7 +47,7 @@ async function add(l) {
     <li v-for="l in offers" :key="l.url" class="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-bg/60 px-2.5 py-1.5 text-xs">
       <Link2 class="h-3.5 w-3.5 shrink-0 text-muted" />
       <span class="min-w-0 flex-1 truncate font-semibold" :title="l.url">{{ l.name }} <span class="font-normal text-muted">· {{ l.provider }}</span></span>
-      <button type="button" class="btn-primary px-2.5 py-1 text-xs" :disabled="full || busy === l.url" :title="full ? 'This task already has the most attachments allowed' : ''" @click="add(l)"><Paperclip class="h-3.5 w-3.5" />Add to attachments</button>
+      <button type="button" class="btn-primary px-2.5 py-1 text-xs"  v-busy="busy === l.url" :disabled="full" :title="full ? 'This task already has the most attachments allowed' : ''" @click="add(l)"><Paperclip class="h-3.5 w-3.5" />Add to attachments</button>
       <button type="button" class="btn-ghost px-2 py-1 text-xs" @click="hide(l.url)">No thanks</button>
     </li>
   </ul>

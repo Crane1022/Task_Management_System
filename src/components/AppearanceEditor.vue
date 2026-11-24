@@ -229,7 +229,7 @@ const scopeOptions = computed(() => props.context
       <div v-if="saving && pending" class="h-2 overflow-hidden rounded-full bg-line" role="progressbar" :aria-valuenow="Math.round(progress * 100)"><div class="h-full bg-accent transition-all" :style="{ width: progress * 100 + '%' }" /></div>
       <p v-if="error" class="text-sm font-semibold text-red-600" role="alert">{{ error }}</p>
       <div class="flex gap-2">
-        <button class="btn-primary flex-1" :disabled="!dirty || saving" @click="save">{{ saving ? (pending ? 'Uploading…' : 'Saving…') : 'Save' }}</button>
+        <button v-busy="saving" class="btn-primary flex-1" :disabled="!dirty" @click="save">{{ saving ? (pending ? 'Uploading…' : 'Saving…') : 'Save' }}</button>
         <button class="btn-ghost" :disabled="saving" @click="confirmReset = true"><RotateCcw class="h-4 w-4" />Reset</button>
       </div>
       <p v-if="dirty" class="text-xs text-muted">You have unsaved changes. Nothing is applied until you press Save.</p>

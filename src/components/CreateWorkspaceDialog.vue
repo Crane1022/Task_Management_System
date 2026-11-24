@@ -62,7 +62,7 @@ async function submit() {
       <p v-if="error" class="mt-3 text-sm font-semibold text-red-600" role="alert">{{ error }}</p>
       <div class="mt-5 flex justify-end gap-2">
         <button type="button" class="btn-ghost" @click="emit('close')">Cancel</button>
-        <button class="btn-primary" :disabled="busy">{{ busy ? 'Creating…' : 'Create workspace' }}</button>
+        <button v-busy="busy" class="btn-primary">{{ busy ? 'Creating…' : 'Create workspace' }}</button>
       </div>
     </form>
   </div>

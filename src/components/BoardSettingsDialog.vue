@@ -21,6 +21,7 @@ const form = ref({ name: props.board.name, description: props.board.description 
 const copyName = ref(`${props.board.name} (copy)`)
 const confirm = ref('') // 'archive' | 'delete'
 const busy = ref(false)
+const busyWhat = ref('') // which button shows the spinner: 'save' | 'duplicate'
 
 const onKey = (e) => e.key === 'Escape' && !confirm.value && emit('close')
 onMounted(() => document.addEventListener('keydown', onKey))
@@ -67,7 +68,7 @@ async function remove() {
         <div><label class="label" for="bs-name">Name</label><input id="bs-name" v-model="form.name" class="input" maxlength="80" /></div>
         <div><label class="label" for="bs-desc">Description</label><textarea id="bs-desc" v-model="form.description" rows="2" class="input" maxlength="300" /></div>
         <div><span class="label">Background</span><BackgroundSwatches v-model="form.background" /></div>
-        <button class="btn-primary" :disabled="busy" @click="save">Save changes</button>
+        <button v-busy="busyWhat === 'save' && busy" class="btn-primary" :disabled="busy" @click="busyWhat = 'save'; save()">{{ busyWhat === 'save' && busy ? 'Saving…' : 'Save changes' }}</button>
       </section>
 
       <section class="mt-6">
@@ -89,7 +90,7 @@ async function remove() {
       <section v-if="board.id !== 'main'" class="mt-6">
         <h3 class="text-sm font-extrabold">Duplicate the structure</h3>
         <p class="mt-1 text-xs text-muted">Makes a new board with the same columns and settings. No tasks are copied.</p>
-        <div class="mt-2 flex gap-2"><input v-model="copyName" class="input" maxlength="80" aria-label="Name of the copy" /><button class="btn-ghost" :disabled="busy" @click="duplicate"><Copy class="h-4 w-4" />Duplicate</button></div>
+        <div class="mt-2 flex gap-2"><input v-model="copyName" class="input" maxlength="80" aria-label="Name of the copy" /><button v-busy="busyWhat === 'duplicate' && busy" class="btn-ghost" :disabled="busy" @click="busyWhat = 'duplicate'; duplicate()"><Copy class="h-4 w-4" />{{ busyWhat === 'duplicate' && busy ? 'Duplicating…' : 'Duplicate' }}</button></div>
       </section>
 
       <section class="mt-6 border-t border-line pt-4">

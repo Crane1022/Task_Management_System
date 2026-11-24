@@ -87,11 +87,14 @@ async function post() {
   busy.value = false
 }
 function startEdit(c) { editingId.value = c.id; editText.value = c.text }
+const savingEdit = ref(false)
 async function saveEdit(c) {
   const t = editText.value.trim()
-  if (!t) return
+  if (!t || savingEdit.value) return
+  savingEdit.value = true
   try { await editComment(props.taskId, c.id, t); editingId.value = '' }
   catch (e) { ui.toast(`Could not save the change: ${e.code ?? e.message}`, 'error') }
+  finally { savingEdit.value = false }
 }
 async function remove() {
   const c = removing.value
@@ -113,7 +116,7 @@ async function remove() {
           <p class="text-xs"><b class="text-ink">{{ c.userName }}</b> <span class="text-muted">· {{ formatDateTime(c.createdAt) }}<template v-if="c.editedAt"> · edited</template></span></p>
           <template v-if="editingId === c.id">
             <textarea v-model="editText" rows="2" class="input mt-1" :maxlength="MAX" aria-label="Edit your comment" />
-            <div class="mt-1 flex justify-end gap-2"><button type="button" class="btn-ghost py-1 text-xs" @click="editingId = ''">Cancel</button><button type="button" class="btn-primary py-1 text-xs" @click="saveEdit(c)">Save</button></div>
+            <div class="mt-1 flex justify-end gap-2"><button type="button" class="btn-ghost py-1 text-xs" @click="editingId = ''">Cancel</button><button type="button" v-busy="savingEdit" class="btn-primary py-1 text-xs" @click="saveEdit(c)">{{ savingEdit ? 'Saving…' : 'Save' }}</button></div>
           </template>
           <p v-else class="mt-0.5 whitespace-pre-wrap break-words rounded-xl bg-bg px-3 py-2 text-sm"><template v-for="(p, i) in parts(c)" :key="i"><span v-if="p.mention" class="rounded bg-accent-soft px-1 font-semibold text-accent">{{ p.text }}</span><template v-else>{{ p.text }}</template></template></p>
           <div v-if="editingId !== c.id && (canComment && mine(c) || canDelete(c))" class="mt-0.5 flex gap-3 text-[11px] font-semibold text-muted">
@@ -135,7 +138,7 @@ async function remove() {
         <textarea ref="box" v-model="text" rows="2" class="input" :maxlength="MAX" placeholder="Write a comment… type @ to tag someone" aria-label="Write a comment" @input="syncCaret" @click="syncCaret" @keyup.left="syncCaret" @keyup.right="syncCaret" @keydown="onKey" @keydown.ctrl.enter.prevent="post" @keydown.meta.enter.prevent="post" />
         <p v-if="left < 200" class="mt-0.5 text-right text-[11px] text-muted">{{ left }} characters left</p>
       </div>
-      <button type="button" class="btn-primary" :disabled="!text.trim() || busy" aria-label="Post comment" @click="post"><Send class="h-4 w-4" /></button>
+      <button type="button" v-busy="busy" class="btn-primary" :disabled="!text.trim()" aria-label="Post comment" @click="post"><Send class="h-4 w-4" /></button>
     </div>
     <p v-else class="mt-2 text-xs text-muted">You can read this discussion but not add to it.</p>
     <ConfirmDialog v-if="removing" title="Delete this comment?" message="The comment is removed for everyone. This cannot be undone." @cancel="removing = null" @confirm="remove" />

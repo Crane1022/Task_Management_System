@@ -3,8 +3,8 @@ import { ref, computed, watch } from 'vue'
 import { ArrowRightLeft } from 'lucide-vue-next'
 
 // Move the task (the same record) to a column of another workspace board. Only boards the person may add tasks to are listed.
-const props = defineProps({ destinations: { type: Array, default: () => [] }, currentBoardId: String, loadColumns: Function })
-const emit = defineEmits(['move'])
+// onMove: the @move handler, taken as a function so the button can wait for it (24 Nov 2026)
+const props = defineProps({ destinations: { type: Array, default: () => [] }, currentBoardId: String, loadColumns: Function, onMove: Function })
 
 const options = computed(() => props.destinations.filter((d) => d.boardId !== props.currentBoardId))
 const groups = computed(() => [...new Set(options.value.map((d) => d.group))])
@@ -18,7 +18,12 @@ watch(dest, async (v) => {
   const cols = (await props.loadColumns(v)).filter((c) => !c.archived)
   columns.value = cols; columnId.value = cols[0]?.id ?? ''
 })
-async function go() { busy.value = true; emit('move', dest.value, columnId.value) }
+// the spinner stays until the move has finished; if it failed the button can be pressed again
+async function go() {
+  if (busy.value) return
+  busy.value = true
+  try { await props.onMove?.(dest.value, columnId.value) } catch (e) { console.error(e) } finally { busy.value = false }
+}
 </script>
 
 <template>
@@ -32,6 +37,6 @@ async function go() { busy.value = true; emit('move', dest.value, columnId.value
         <select id="mv-col" v-model="columnId" class="input" :disabled="!columns.length"><option v-for="c in columns" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
     </div>
     <p class="mt-1 text-[11px] text-muted">It stays one task: it leaves this board and appears on the new one, with its comments, attachments and history.</p>
-    <button type="button" class="btn-primary mt-2 py-1" :disabled="!dest || !columnId || busy" @click="go">{{ busy ? 'Moving…' : 'Move task' }}</button>
+    <button type="button" v-busy="busy" class="btn-primary mt-2 py-1" :disabled="!dest || !columnId" @click="go">{{ busy ? 'Moving…' : 'Move task' }}</button>
   </details>
 </template>

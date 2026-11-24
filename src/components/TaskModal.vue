@@ -32,8 +32,27 @@ const props = defineProps({
   // (boardId) -> the board when it is a Maintenance board (a new task there is a PMS ticket), else null
   ticketBoardFor: { type: Function, default: () => null },
   profile: Object, // the signed-in person (for the PMS ticket fields)
+  // 24 Nov 2026: create / save / delete / move are taken as functions (still written @create, @save… by the parent)
+  // so the panel can wait for them and show "Saving…" with a spinner until the write has finished
+  onCreate: Function,
+  onSave: Function,
+  onDelete: Function,
+  onMove: Function,
 })
-const emit = defineEmits(['close', 'create', 'save', 'delete', 'move'])
+const emit = defineEmits(['close'])
+
+// What the panel is busy doing: '' | 'save' | 'delete' | 'move'. While busy the form is locked, the buttons can't
+// be pressed twice and the panel can't be closed (the write is still going).
+const busy = ref('')
+async function runBusy(kind, fn, ...args) {
+  if (busy.value || !fn) return
+  busy.value = kind
+  try { await fn(...args) } catch (e) { console.error(e) } finally { busy.value = '' } // on success the parent closes the panel; on failure it stays open
+}
+const saveLabel = computed(() => {
+  if (busy.value === 'save') return t ? 'Saving…' : ticketBoard.value ? 'Raising ticket…' : 'Creating…'
+  return t ? 'Save changes' : ticketBoard.value ? 'Raise ticket' : 'Create task'
+})
 
 const t = props.task
 const form = ref({
@@ -131,7 +150,7 @@ const dirty = computed(() => !props.readonly && snapshot() !== baseline.value)
 const confirmLeave = ref(false)
 
 function requestClose() {
-  if (confirmLeave.value || confirmDelete.value) return
+  if (busy.value || confirmLeave.value || confirmDelete.value) return
   if (dirty.value) confirmLeave.value = true
   else emit('close')
 }
@@ -151,7 +170,7 @@ function onBackdropClick(e) {
 
 // Esc: closes an open question first (= keep editing), otherwise tries to close the panel
 function onKey(e) {
-  if (e.key !== 'Escape') return
+  if (e.key !== 'Escape' || busy.value) return
   if (confirmLeave.value) confirmLeave.value = false
   else if (confirmDelete.value) confirmDelete.value = false
   else requestClose()
@@ -195,13 +214,14 @@ function payload() {
 }
 
 function submit() {
+  if (busy.value) return
   if (!form.value.title.trim()) { error.value = ticketBoard.value ? 'Give the ticket a title.' : 'Give the task a title.'; return }
   if (ticketBoard.value && (error.value = ticketError())) return
   error.value = ''
   const data = payload()
   if (!t) {
     const k = ticket.value
-    emit('create', data, form.value.columnId, destValue.value, ticketBoard.value ? { type: k.type, unit: k.unit, unitText: k.unitText, tags: [...k.tags], links: [...k.links], choices: k.choices } : null)
+    runBusy('save', props.onCreate, data, form.value.columnId, destValue.value, ticketBoard.value ? { type: k.type, unit: k.unit, unitText: k.unitText, tags: [...k.tags], links: [...k.links], choices: k.choices } : null)
     return
   }
 
@@ -216,8 +236,10 @@ function submit() {
   }
   if (form.value.columnId !== t.columnId) changes.columnId = form.value.columnId
   if (!Object.keys(changes).length) { emit('close'); return }
-  emit('save', changes, notes)
+  runBusy('save', props.onSave, changes, notes)
 }
+const doDelete = (reason) => runBusy('delete', props.onDelete, ...(reason === undefined ? [] : [reason]))
+const doMove = (d, c) => runBusy('move', props.onMove, d, c)
 </script>
 
 <template>
@@ -225,10 +247,10 @@ function submit() {
     <form class="task-panel flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
       <header class="flex items-center justify-between border-b border-line px-5 py-3">
         <h2 class="text-base font-extrabold">{{ t ? 'Task details' : 'New task' }}</h2>
-        <button type="button" class="rounded p-1 text-muted hover:bg-bg" aria-label="Close" @click="requestClose"><X class="h-5 w-5" /></button>
+        <button type="button" class="rounded p-1 text-muted hover:bg-bg disabled:opacity-50" aria-label="Close" :disabled="!!busy" @click="requestClose"><X class="h-5 w-5" /></button>
       </header>
 
-      <fieldset :disabled="readonly" class="min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <fieldset :disabled="readonly || !!busy" :aria-busy="!!busy || null" class="min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <div>
           <label class="label" for="t-title">Title</label>
           <input id="t-title" v-model="form.title" class="input text-base font-bold" maxlength="200" :placeholder="ticketBoard ? 'e.g. Aircond leaking in master bedroom' : 'e.g. Prepare Unit A101 for new tenant'" autofocus />
@@ -312,18 +334,18 @@ function submit() {
 
         <template v-if="t">
           <TaskAttachments :task-id="t.id" :attachments="(liveTask ?? t).attachments ?? []" :can-edit="!readonly" />
-          <TaskMove v-if="!readonly" :destinations="destinations" :current-board-id="t.boardId" :load-columns="loadColumns" @move="(d, c) => emit('move', d, c)" />
+          <TaskMove v-if="!readonly" :destinations="destinations" :current-board-id="t.boardId" :load-columns="loadColumns" @move="doMove" />
           <TaskComments :task-id="t.id" :users="users" :can-comment="!readonly" :can-moderate="canModerate" :task="liveTask ?? t" />
           <TaskActivity :task-id="t.id" />
         </template>
       </fieldset>
 
       <footer class="flex items-center justify-between border-t border-line px-5 py-3">
-        <button v-if="t && mayDelete" type="button" class="btn-ghost text-red-600" @click="confirmDelete = true"><Trash2 class="h-4 w-4" />Delete</button>
+        <button v-if="t && mayDelete" type="button" class="btn-ghost text-red-600" :disabled="!!busy" @click="confirmDelete = true"><Trash2 class="h-4 w-4" />Delete</button>
         <span v-else />
         <div class="flex gap-2">
-          <button type="button" class="btn-ghost" @click="requestClose">Cancel</button>
-          <button v-if="!readonly" class="btn-primary">{{ t ? 'Save changes' : ticketBoard ? 'Raise ticket' : 'Create task' }}</button>
+          <button type="button" class="btn-ghost" :disabled="!!busy" @click="requestClose">Cancel</button>
+          <button v-if="!readonly" v-busy="busy === 'save'" class="btn-primary min-w-[8.5rem]" :disabled="!!busy && busy !== 'save'">{{ saveLabel }}</button>
         </div>
       </footer>
     </form>
@@ -331,9 +353,9 @@ function submit() {
     <Transition name="confirm" type="transition">
     <ConfirmDialog v-if="confirmDelete && ticketCard" :title="`Delete ticket ${t.pmsLink.id}?`"
       :message="`This removes the card here and deletes ${t.pmsLink.id} in the PMS too. The PMS keeps the ticket, marked deleted with your reason.`"
-      reason-label="Reason for deleting" @cancel="confirmDelete = false" @confirm="(reason) => emit('delete', reason)" />
+      reason-label="Reason for deleting" @cancel="confirmDelete = false" @confirm="doDelete" />
     <ConfirmDialog v-else-if="confirmDelete" title="Delete this task?" message="This permanently removes the task for everyone. This cannot be undone."
-      @cancel="confirmDelete = false" @confirm="emit('delete')" />
+      @cancel="confirmDelete = false" @confirm="doDelete()" />
     <ConfirmDialog v-else-if="confirmLeave" title="Leave without saving?"
       :message="t ? 'You have changes in this task that are not saved. If you leave now, they will be lost.' : 'This new task has not been created yet. If you leave now, what you typed will be lost.'"
       confirm-text="Leave" cancel-text="Keep editing" @cancel="confirmLeave = false" @confirm="leaveWithoutSaving" />

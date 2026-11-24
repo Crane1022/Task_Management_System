@@ -197,7 +197,7 @@ async function adopt() {
               </div></div>
             <div><span class="label">Colour</span>
               <div class="flex gap-1.5"><button v-for="c in COLUMN_COLORS" :key="c.id" type="button" class="h-7 w-7 rounded-full border-2" :class="form.color === c.id ? 'border-ink' : 'border-transparent'" :style="{ background: c.hex }" :title="c.name" :aria-label="c.name" @click="form.color = c.id" /></div></div>
-            <button class="btn-primary" :disabled="saving">{{ saving ? 'Saving…' : 'Save settings' }}</button>
+            <button v-busy="saving" class="btn-primary">{{ saving ? 'Saving…' : 'Save settings' }}</button>
           </form>
 
           <div v-if="store.isOwner(ws) || (ws.superPrivate && canManage)" class="mt-4 rounded-2xl border border-line bg-surface p-4">

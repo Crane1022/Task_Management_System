@@ -165,7 +165,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
             <select id="p-tz" v-model="form.timezone" class="input"><option value="">Same as my device</option><option v-for="z in zones" :key="z" :value="z">{{ z }}</option></select>
             <p class="mt-1 text-xs text-muted">Used for times in the activity log. Deadlines are plain dates and do not move.</p></div>
         </div>
-        <button class="btn-primary mt-4" :disabled="!dirty || savingProfile" @click="saveProfile">{{ savingProfile ? 'Saving…' : 'Save' }}</button>
+        <button v-busy="savingProfile" class="btn-primary mt-4" :disabled="!dirty" @click="saveProfile">{{ savingProfile ? 'Saving…' : 'Save' }}</button>
         <p class="mt-3 text-xs text-muted">The app is in English only for now, so there is no language setting yet.</p>
       </section>
 
@@ -181,7 +181,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
             <label class="chk"><input v-model="prefs.email.assigned" type="checkbox" />A task is assigned to me</label>
             <label class="chk"><input v-model="prefs.email.deadlines" type="checkbox" />A deadline is coming up or missed</label></fieldset>
         </div>
-        <button class="btn-primary mt-4" :disabled="prefsBusy" @click="savePrefs">{{ prefsBusy ? 'Saving…' : 'Save choices' }}</button>
+        <button v-busy="prefsBusy" class="btn-primary mt-4" @click="savePrefs">{{ prefsBusy ? 'Saving…' : 'Save choices' }}</button>
       </section>
 
       <section class="card">
