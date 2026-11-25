@@ -1,5 +1,9 @@
 <script setup>
+<<<<<<< HEAD
 import { computed, ref, watch } from 'vue'
+=======
+import { computed, ref } from 'vue'
+>>>>>>> testing
 import { useRouter, useRoute } from 'vue-router'
 import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound, PawPrint, FolderPlus, Gift } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
@@ -46,6 +50,7 @@ const accountLinks = [
   { to: '/settings/companion', label: 'My companion', icon: PawPrint },
 ]
 const adminLinks = [{ to: '/staff', label: 'Staff', icon: Users }] // Director (super_admin) only
+<<<<<<< HEAD
 // My companion works as a dropdown for Directors: clicking it opens Festive events underneath, clicking it again
 // closes it, and going anywhere else in the app closes it too (25 Nov 2026)
 const inCompanion = (path) => path.startsWith('/settings/companion') || path.startsWith('/festive')
@@ -54,6 +59,9 @@ function clickCompanion() {
   companionOpen.value = inCompanion(route.path) ? !companionOpen.value : true // arriving from elsewhere: open
 }
 watch(() => route.path, (p) => { if (!inCompanion(p)) companionOpen.value = false; else if (p.startsWith('/festive')) companionOpen.value = true })
+=======
+const companionOpen = computed(() => route.path.startsWith('/settings/companion') || route.path.startsWith('/festive'))
+>>>>>>> testing
 const roleLabel = { super_admin: 'Director', dept_manager: 'Department Manager', employee: 'Employee' }
 const initials = computed(() => (auth.profile?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase())
 
@@ -115,8 +123,20 @@ async function signOut() { await auth.logout(); router.push('/login') }
       >
         <component :is="l.icon" class="h-[18px] w-[18px] shrink-0" />
         <span :class="ui.rail && 'sm:hidden'">{{ l.label }}</span>
+<<<<<<< HEAD
         <!-- dropdown arrow: points right when closed, turns to point down when open -->
         <ChevronRight v-if="l.to === '/settings/companion' && auth.isAdmin" class="ml-auto h-4 w-4 shrink-0 transition-transform duration-200" :class="[companionOpen && 'rotate-90', ui.rail && 'sm:hidden']" aria-hidden="true" />
+=======
+      </router-link>
+      <!-- Directors: Festive events sits under My companion, a step in. Hidden until My companion is opened; stays while on either page -->
+      <router-link
+        v-if="auth.isAdmin && companionOpen" to="/festive" exact-active-class="bg-accent-soft text-accent"
+        class="flex items-center gap-3 rounded-lg py-2 pr-3 text-sm font-semibold text-muted hover:bg-bg"
+        :class="ui.rail ? 'pl-9 sm:pl-3' : 'pl-9'" title="Festive events (Director)" @click="ui.mobileNav = false"
+      >
+        <Gift class="h-[18px] w-[18px] shrink-0" />
+        <span :class="ui.rail && 'sm:hidden'">Festive events</span>
+>>>>>>> testing
       </router-link>
       <!-- Directors: Festive events sits under My companion, a step in. Hidden until My companion is opened; stays while on either page -->
       <!-- opens and closes smoothly, the same way as the workspace folders -->
