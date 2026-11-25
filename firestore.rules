@@ -411,6 +411,26 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
     }
 
+    // ---------- festive companion (25 Nov 2026) ----------
+    // festive/settings: the whole-company switches. Everyone signed in reads them; only a Director (super_admin) changes them.
+    match /festive/{docId} {
+      allow read: if hasProfile();
+      allow write: if isAdmin() && docId == 'settings';
+    }
+    // festive_events/{id}: one special day. audience 'all' = everyone; 'selected' = only the people in audienceIds
+    // (a Director picks them). Nobody else can even read a 'selected' event. Only Directors create, change or delete.
+    match /festive_events/{id} {
+      allow read: if isAdmin()
+        || (hasProfile() && (resource.data.audience == 'all' || request.auth.uid in resource.data.audienceIds));
+      allow create, update: if isAdmin()
+        && request.resource.data.audience in ['all', 'selected']
+        && request.resource.data.audienceIds is list
+        && request.resource.data.audienceIds.size() <= 500
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60;
+      allow delete: if isAdmin();
+    }
+    // (each person's wardrobe, pop-ups seen and birthday live in users/{uid}/settings/festive: the settings rule above)
+
     // ---------- reserved for the next phases ----------
     match /{collection}/{id} {
       allow read, write: if false;

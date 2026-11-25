@@ -1,13 +1,14 @@
 <script setup>
 import { computed } from 'vue'
-import { Paperclip, MessageSquare, CheckSquare, CalendarDays, Check } from 'lucide-vue-next'
+import { Paperclip, MessageSquare, CheckSquare, CalendarDays, Check, ChevronRight } from 'lucide-vue-next'
 import { useBoardStore } from '@/stores/board'
 import { priorityOf, deptName } from '@/utils/constants'
 import UserAvatar from './UserAvatar.vue'
 import RichText from './RichText.vue'
 import { formatDate, dueState } from '@/utils/dates'
 
-const props = defineProps({ task: Object, users: Object, boardLabel: { type: String, default: '' } })
+const props = defineProps({ task: Object, users: Object, boardLabel: { type: String, default: '' }, canMove: Boolean })
+const emit = defineEmits(['move'])
 
 const priority = computed(() => priorityOf(props.task.priority))
 const due = computed(() => dueState(props.task))
@@ -56,9 +57,13 @@ const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(
         <span v-if="task.attachments?.length" class="flex items-center gap-1"><Paperclip class="h-3.5 w-3.5" />{{ task.attachments.length }}</span>
         <span v-if="task.commentCount" class="flex items-center gap-1"><MessageSquare class="h-3.5 w-3.5" />{{ task.commentCount }}</span>
       </div>
+      <div class="flex items-center gap-2">
       <div class="flex -space-x-1.5">
         <span v-for="u in people.slice(0, 3)" :key="u.id" class="rounded-full border-2 border-surface"><UserAvatar :user="u" :size="24" /></span>
         <span v-if="people.length > 3" class="grid h-6 w-6 place-items-center rounded-full border-2 border-surface bg-bg text-[10px] font-bold">+{{ people.length - 3 }}</span>
+      </div>
+      <!-- phone: move to another column without dragging (25 Nov 2026) -->
+      <button v-if="canMove" type="button" class="flex h-8 items-center gap-0.5 rounded-lg border border-line bg-bg px-2.5 text-xs font-extrabold text-accent sm:hidden" aria-label="Move task to another column" @click.stop="emit('move')">Move<ChevronRight class="h-3.5 w-3.5" /></button>
       </div>
     </div>
   </article>

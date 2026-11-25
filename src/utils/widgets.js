@@ -22,9 +22,10 @@ export const DEFAULT_WIDGETS = () =>
   ['total', 'completed', 'pending', 'overdue', 'rate', 'byStatus', 'workload', 'dueSoon'].map(makeWidget)
 
 export const SIZE_CLASS = {
-  s: 'md:col-span-3 lg:col-span-3',
-  m: 'md:col-span-6 lg:col-span-6',
-  l: 'md:col-span-6 lg:col-span-12',
+  // phone: small widgets two side by side, the others the full width (25 Nov 2026)
+  s: 'col-span-1 md:col-span-3 lg:col-span-3',
+  m: 'col-span-2 md:col-span-6 lg:col-span-6',
+  l: 'col-span-2 md:col-span-6 lg:col-span-12',
 }
 
 export const PALETTES = [

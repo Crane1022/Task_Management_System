@@ -48,7 +48,7 @@ function onFile(e) {
           <p class="text-xs text-muted">JPG, PNG or WebP, up to 5 MB. It is shrunk to fit and saved privately to your account.</p>
         </div>
         <input ref="input" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="onFile" />
-        <button type="button" class="btn-ghost" :disabled="busy" @click="input.click()"><ImagePlus class="h-4 w-4" />{{ bg?.type === 'upload' ? 'Replace' : 'Upload' }}</button>
+        <button v-busy="busy" type="button" class="btn-ghost" @click="input.click()"><ImagePlus class="h-4 w-4" />{{ bg?.type === 'upload' ? 'Replace' : 'Upload' }}</button>
         <button v-if="bg?.type === 'upload'" type="button" class="btn-ghost text-red-600" :disabled="busy" @click="emit('remove-upload')"><Trash2 class="h-4 w-4" />Remove</button>
       </div>
       <p v-if="error" class="mt-2 text-xs font-semibold text-red-600" role="alert">{{ error }}</p>

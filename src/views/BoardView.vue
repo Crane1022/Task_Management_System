@@ -87,17 +87,45 @@ async function confirmDone() { await board.updateColumnSettings(doneChange.value
 async function confirmArchive() { await board.archiveColumn(columnToArchive.value, true); columnToArchive.value = null }
 async function confirmDelete(targetId) { await board.removeColumn(columnToDelete.value, targetId); columnToDelete.value = null }
 
+// ----- phone (25 Nov 2026): each column fills the screen. The tabs above jump to a column, swiping works too,
+// and a card's Move button opens a list of columns (dragging a card with a thumb is hard).
+const boardScroller = ref(null)
+const activeCol = ref(0)
+const columnEls = () => [...(boardScroller.value?.querySelectorAll('[data-col-id]') ?? [])]
+function showColumn(i) {
+  const el = columnEls()[i]
+  if (el) boardScroller.value.scrollTo({ left: el.offsetLeft - 16, behavior: 'smooth' })
+}
+function onBoardScroll() {
+  if (!ui.isPhone) return
+  const els = columnEls()
+  const x = boardScroller.value.scrollLeft + 16
+  let best = 0
+  els.forEach((el, i) => { if (Math.abs(el.offsetLeft - x) < Math.abs(els[best].offsetLeft - x)) best = i })
+  activeCol.value = best
+}
+const moving = ref(null) // the task whose Move sheet is open
+async function moveTo(column, i) {
+  const t = moving.value
+  moving.value = null
+  if (!t || t.columnId === column.id) return
+  const ids = [...board.tasksIn(column.id).map((x) => x.id).filter((id) => id !== t.id), t.id] // to the bottom of that column
+  showColumn(i)
+  await board.dropTask({ taskId: t.id, columnId: column.id, ids }) // the card shows "Syncing", then "Saved"
+  if (board.tasks.find((x) => x.id === t.id)?.columnId === column.id) ui.toast(`Moved to ${column.name}`)
+}
+
 const visibleCount = computed(() => board.activeColumns.reduce((n, c) => n + board.tasksIn(c.id).length, 0))
 const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== columnToDelete.value?.id))
 </script>
 
 <template>
   <div class="relative flex h-full flex-col">
-    <div class="flex flex-wrap items-center gap-2 px-4 pb-2 pt-4">
+    <div class="flex flex-wrap items-center gap-2 px-4 pb-2 pt-3 sm:pt-4">
       <div class="mr-2 min-w-0">
         <p v-if="board.workspace" class="truncate text-xs font-semibold text-muted"><router-link :to="`/workspaces/${board.workspace.id}`" class="hover:text-accent">{{ board.workspace.name }}</router-link></p>
         <h1 class="flex items-center gap-1.5 text-lg font-extrabold">
-          {{ mine ? 'My tasks' : 'Kanban board' }}<span v-if="board.boardName" class="truncate text-sm font-bold text-muted">· {{ board.boardName }}</span>
+          <span class="hidden sm:inline">{{ mine ? 'My tasks' : 'Kanban board' }}</span><span v-if="board.boardName" class="truncate text-sm font-bold text-muted"><span class="hidden sm:inline">· </span>{{ board.boardName }}</span>
           <button v-if="board.boardDoc" class="rounded p-1 text-muted hover:text-highlight" :class="wsStore.isStarred(board.boardId) && 'text-highlight'" :aria-label="wsStore.isStarred(board.boardId) ? 'Unstar this board' : 'Star this board'" :aria-pressed="wsStore.isStarred(board.boardId)" @click="wsStore.toggleStar(board.boardId)"><Star class="h-4 w-4" :fill="wsStore.isStarred(board.boardId) ? 'currentColor' : 'none'" /></button>
           <button v-if="board.boardDoc && board.canManage" class="rounded p-1 text-muted hover:text-accent" aria-label="Board settings" title="Board settings" @click="settingsOpen = true"><Settings2 class="h-4 w-4" /></button>
         </h1>
@@ -105,7 +133,7 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
       <BoardPicker />
       <span v-if="board.resolved !== false && !board.loading && !board.canEdit && !board.denied" class="flex items-center gap-1 rounded-full bg-bg px-2.5 py-1 text-xs font-bold text-muted"><Eye class="h-3.5 w-3.5" />View only</span>
       <span v-if="board.aggregate && !mine" class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent" title="The same tasks as on each workspace board">All my workspaces</span>
-      <FilterBar :mine="mine" />
+      <div class="scroll-row"><FilterBar :mine="mine" /></div>
       <button v-if="board.canManage && board.archivedColumns.length" class="btn-ghost py-1.5" @click="showArchived = !showArchived"><Archive class="h-4 w-4" />Archived ({{ board.archivedColumns.length }})</button>
     </div>
 
@@ -153,7 +181,14 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
 
     <template v-else>
       <p v-if="board.hasFilters && !visibleCount" class="mx-4 mt-2 flex items-center gap-2 text-sm text-muted"><SearchX class="h-4 w-4" />No tasks match these filters.</p>
-      <div class="flex min-h-0 flex-1 items-start gap-4 overflow-x-auto px-4 pb-4 pt-9">
+      <div v-if="ui.isPhone && colList.length > 1" class="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-1 pt-1" role="tablist" aria-label="Columns">
+        <button v-for="(c, i) in colList" :key="c.id" type="button" role="tab" :aria-selected="activeCol === i"
+          class="flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold tracking-wide"
+          :class="activeCol === i ? 'border-accent bg-accent text-on-primary' : 'border-line bg-surface text-muted'" @click="showColumn(i)">
+          {{ c.name }}<span class="grid h-5 min-w-[20px] place-items-center rounded-full px-1 text-[11px]" :class="activeCol === i ? 'bg-white/25' : 'bg-bg'">{{ board.taskCount(c.id) }}</span>
+        </button>
+      </div>
+      <div ref="boardScroller" class="flex min-h-0 flex-1 snap-x snap-mandatory scroll-px-4 items-start gap-4 overflow-x-auto px-4 pb-4 pt-8 sm:snap-none sm:pt-9" @scroll.passive="onBoardScroll">
         <VueDraggable
           v-model="colList" :disabled="!board.canEdit" handle=".col-handle" :animation="180"
           ghost-class="col-ghost" chosen-class="col-chosen" class="flex max-h-full items-start gap-4" @end="onColumnDrop"
@@ -161,13 +196,13 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
           <KanbanColumn
             v-for="(c, i) in colList" :key="c.id" :data-col-id="c.id" :column="c" :tasks="board.tasksIn(c.id)" :total="board.taskCount(c.id)" :users="board.users" :label-for="board.boardLabelOf"
             :can-manage="board.canManage" :can-delete="board.canDeleteColumn" :can-edit="board.canEdit" :cat="CATS[i % CATS.length]"
-            @open="editor.openTask" @add="editor.openNew(c.id)" @drop="board.dropTask" @rename="(n) => board.rename(c, n)"
+            @open="editor.openTask" @add="editor.openNew(c.id)" @drop="board.dropTask" @move="(t) => (moving = t)" @rename="(n) => board.rename(c, n)"
             @update="(changes) => updateColumn(c, changes)" @archive="columnToArchive = c" @delete="columnToDelete = c"
           />
         </VueDraggable>
         <!-- tasks from other boards whose status the Main board has no column for -->
         <KanbanColumn v-if="board.aggregate && board.unplacedTasks.length" virtual :column="{ id: OTHER_COLUMN, name: 'OTHER STATUSES' }" :tasks="board.tasksIn(OTHER_COLUMN)" :total="board.taskCount(OTHER_COLUMN)" :users="board.users" :can-edit="false" :label-for="board.boardLabelOf" @open="editor.openTask" />
-        <form v-if="board.canManage" class="w-72 shrink-0 rounded-2xl border border-dashed border-line p-3" @submit.prevent="addColumn">
+        <form v-if="board.canManage" class="w-[calc(100vw-2rem)] shrink-0 snap-start rounded-2xl border border-dashed border-line p-3 sm:w-72" @submit.prevent="addColumn">
           <label class="label" for="new-col">Add a column</label>
           <div class="flex gap-2">
             <input id="new-col" v-model="newColumn" class="input" placeholder="e.g. BLOCKED" />
@@ -177,6 +212,24 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
       </div>
     </template>
 
+    <!-- phone: move a card to another column -->
+    <template v-if="moving">
+      <div class="fixed inset-0 z-50 bg-black/40" @click="moving = null" />
+      <div class="sheet fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl" role="dialog" aria-label="Move task">
+        <div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" aria-hidden="true" />
+        <p class="text-xs font-bold text-muted">Move to</p>
+        <p class="truncate text-base font-extrabold">{{ moving.title }}</p>
+        <ul class="mt-3 space-y-1.5">
+          <li v-for="(c, i) in colList" :key="c.id">
+            <button type="button" class="flex min-h-[48px] w-full items-center justify-between rounded-xl border px-4 text-sm font-extrabold tracking-wide"
+              :class="c.id === moving.columnId ? 'border-accent bg-accent-soft text-accent' : 'border-line hover:bg-bg'" :disabled="c.id === moving.columnId" @click="moveTo(c, i)">
+              {{ c.name }}<span class="text-xs font-bold text-muted">{{ c.id === moving.columnId ? 'Here now' : board.taskCount(c.id) === 1 ? '1 task' : board.taskCount(c.id) + ' tasks' }}</span>
+            </button>
+          </li>
+        </ul>
+        <button type="button" class="btn-ghost mt-3 w-full" @click="moving = null">Cancel</button>
+      </div>
+    </template>
     <TaskModalHost :editor="editor" />
     <BoardSettingsDialog v-if="settingsOpen && board.boardDoc" :board="board.boardDoc" :workspace="board.workspace" :users="board.users" @close="settingsOpen = false" />
     <DeleteColumnDialog v-if="columnToDelete" :column="columnToDelete" :count="board.ownTaskCount(columnToDelete.id)" :targets="deleteTargets" @cancel="columnToDelete = null" @confirm="confirmDelete" />

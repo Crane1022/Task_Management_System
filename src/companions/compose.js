@@ -1,6 +1,6 @@
 // Puts a drawing together: the body, then the head (which moves when the pet looks around), an optional face photo,
 // the face features, and an accessory. Pure strings, no Vue, so it can be tested.
-import { accessorySvg } from './accessories.js'
+import { accessorySvg, UNDER_HEAD, fitsWith } from './accessories.js'
 import { getAnimal } from './registry.js'
 
 // Each file holds one group of animals and is only downloaded when one of them is needed.
@@ -24,7 +24,9 @@ export const artGroups = () => Object.keys(GROUPS)
 const SAFE_SRC = /^(blob:[^"'<>\s]+|data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+)$/
 
 // photo = { href, zoom, x, y }; zoom 1..3, x and y -1..1 (only have an effect once zoomed in)
-export function composePetSvg({ art, uid = 'p', photo = null, accessory = 'none' }) {
+// accessory = the person's own; outfit = a festive one drawn with it (the accessory steps aside only if both sit in one place)
+// extra = an everyday item for today (umbrella, nightcap, ...), drawn only where it does not clash with the other two
+export function composePetSvg({ art, uid = 'p', photo = null, accessory = 'none', outfit = '', extra = '' }) {
   if (!art) return ''
   const usePhoto = !!(photo && art.face && SAFE_SRC.test(photo.href ?? ''))
   let photoLayer = ''
@@ -38,7 +40,10 @@ export function composePetSvg({ art, uid = 'p', photo = null, accessory = 'none'
       + `<g class="pet-photo" clip-path="url(#${id})"><image href="${photo.href}" x="${bx + bw / 2 - w / 2 + ox}" y="${by + bh / 2 - h / 2 + oy}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/></g>`
       + `<path d="${art.face.d}" fill="none" stroke="rgba(0,0,0,.2)" stroke-width="1.2"/>`
   }
-  const acc = accessorySvg(accessory, art.anchors)
-  const scarf = accessory === 'scarf'
-  return `${art.under}${scarf ? acc : ''}<g class="pet-head">${art.head}${photoLayer}${usePhoto ? '' : art.front}${scarf ? '' : acc}</g>`
+  const items = [fitsWith(accessory, outfit) ? accessory : '', outfit].filter((x) => x && x !== 'none')
+  if (extra && extra !== outfit && items.every((x) => fitsWith(x, extra) && fitsWith(extra, x))) items.push(extra)
+  // neck things sit under the head, over the body; the rest over the head. The outfit is drawn last, on top.
+  const under = items.filter((x) => UNDER_HEAD.has(x)).map((x) => accessorySvg(x, art.anchors)).join('')
+  const over = items.filter((x) => !UNDER_HEAD.has(x)).map((x) => accessorySvg(x, art.anchors)).join('')
+  return `${art.under}${under}<g class="pet-head">${art.head}${photoLayer}${usePhoto ? '' : art.front}${over}</g>`
 }

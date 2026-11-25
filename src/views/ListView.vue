@@ -9,6 +9,7 @@ import { formatDate, dueState } from '@/utils/dates'
 import FilterBar from '@/components/FilterBar.vue'
 import BoardPicker from '@/components/BoardPicker.vue'
 import TaskModalHost from '@/components/TaskModalHost.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 
 const board = useBoardStore()
 const editor = reactive(useTaskEditor())
@@ -41,18 +42,21 @@ const rows = computed(() => {
   else l.sort((a, b) => (b.createdAt?.toMillis?.() ?? 9e15) - (a.createdAt?.toMillis?.() ?? 9e15))
   return l
 })
+const peopleOf = (t) => (t.assignedTo ?? []).map((id) => board.users[id]).filter(Boolean)
 const names = (t) => (t.assignedTo ?? []).map((id) => displayOf(board.users[id])).filter(Boolean).join(', ') || '—'
 </script>
 
 <template>
   <div class="flex h-full flex-col">
-    <div class="flex flex-wrap items-center gap-2 px-4 pb-2 pt-4">
-      <h1 class="mr-2 text-lg font-extrabold">List<span v-if="board.boardName" class="text-sm font-bold text-muted"> · {{ board.boardName }}</span><span v-if="shown" class="text-sm font-bold text-accent"> · {{ shown }} ({{ rows.length }})</span></h1>
+    <div class="flex flex-wrap items-center gap-2 px-4 pb-2 pt-3 sm:pt-4">
+      <h1 class="mr-2 text-lg font-extrabold"><span class="hidden sm:inline">List</span><span v-if="board.boardName" class="text-sm font-bold text-muted"><span class="hidden sm:inline"> · </span>{{ board.boardName }}</span><span v-if="shown" class="text-sm font-bold text-accent"> · {{ shown }} ({{ rows.length }})</span></h1>
       <BoardPicker />
-      <FilterBar />
-      <select v-model="sort" class="input w-44" aria-label="Sort tasks">
-        <option value="due">Sort: deadline</option><option value="priority">Sort: priority</option><option value="new">Sort: newest</option>
-      </select>
+      <div class="scroll-row">
+        <FilterBar />
+        <select v-model="sort" class="input w-44" aria-label="Sort tasks">
+          <option value="due">Sort: deadline</option><option value="priority">Sort: priority</option><option value="new">Sort: newest</option>
+        </select>
+      </div>
     </div>
 
     <div v-if="board.loading" class="space-y-1.5 px-4 pt-2" aria-label="Loading tasks" role="status">
@@ -71,17 +75,34 @@ const names = (t) => (t.assignedTo ?? []).map((id) => displayOf(board.users[id])
       </div>
     </div>
     <div v-else class="min-h-0 flex-1 overflow-auto px-4 pb-4">
-      <table class="w-full min-w-[760px] border-separate border-spacing-y-1.5 text-left text-sm">
+      <!-- phone (25 Nov 2026): one card per task instead of a wide table -->
+      <ul class="space-y-2 sm:hidden">
+        <li v-for="t in rows" :key="t.id">
+          <button type="button" class="w-full rounded-2xl border border-line bg-surface px-3.5 py-3 text-left active:border-highlight" @click="editor.openTask(t)">
+            <span class="flex items-start gap-2.5">
+              <span class="min-w-0 flex-1 text-[15px] font-extrabold leading-snug">{{ t.title }}</span>
+              <span class="flex shrink-0 -space-x-1.5"><UserAvatar v-for="u in peopleOf(t).slice(0, 2)" :key="u.id" :user="u" :size="26" class="rounded-full border-2 border-surface" /></span>
+            </span>
+            <span class="mt-2 flex flex-wrap items-center gap-1.5 text-xs font-bold">
+              <span class="rounded-full bg-accent-soft px-2 py-0.5 text-accent">{{ board.columnNameOf(t) }}</span>
+              <span class="rounded-md px-1.5 py-0.5" :class="priorityOf(t.priority).cls">{{ priorityOf(t.priority).name }}</span>
+              <span class="rounded-md bg-bg px-1.5 py-0.5 text-muted">{{ deptName(t.departmentId) }}</span>
+              <span class="ml-auto" :class="dueState(t) === 'overdue' ? 'text-red-600' : 'text-muted'">{{ formatDate(t.dueDate) || 'No deadline' }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <table class="hidden w-full min-w-[560px] lg:min-w-[760px] sm:table border-separate border-spacing-y-1.5 text-left text-sm">
         <thead class="text-xs font-bold text-muted">
-          <tr><th class="px-3 py-1">Task</th><th class="px-3 py-1">Status</th><th class="px-3 py-1">Assigned to</th><th class="px-3 py-1">Priority</th><th class="px-3 py-1">Department</th><th class="px-3 py-1">Deadline</th></tr>
+          <tr><th class="px-3 py-1">Task</th><th class="px-3 py-1">Status</th><th class="hidden px-3 py-1 lg:table-cell">Assigned to</th><th class="px-3 py-1">Priority</th><th class="hidden px-3 py-1 lg:table-cell">Department</th><th class="px-3 py-1">Deadline</th></tr>
         </thead>
         <tbody>
           <tr v-for="t in rows" :key="t.id" tabindex="0" class="group cursor-pointer" @click="editor.openTask(t)" @keydown.enter="editor.openTask(t)">
             <td class="rounded-l-xl border-y border-l border-line bg-surface px-3 py-2.5 font-bold group-hover:border-highlight group-focus-visible:border-accent">{{ t.title }}</td>
             <td class="border-y border-line bg-surface px-3 py-2.5 group-hover:border-highlight">{{ board.columnNameOf(t) }}</td>
-            <td class="border-y border-line bg-surface px-3 py-2.5 group-hover:border-highlight">{{ names(t) }}</td>
+            <td class="hidden border-y border-line bg-surface px-3 py-2.5 group-hover:border-highlight lg:table-cell">{{ names(t) }}</td>
             <td class="border-y border-line bg-surface px-3 py-2.5 group-hover:border-highlight"><span class="rounded-md px-1.5 py-0.5 text-xs font-semibold" :class="priorityOf(t.priority).cls">{{ priorityOf(t.priority).name }}</span></td>
-            <td class="border-y border-line bg-surface px-3 py-2.5 group-hover:border-highlight">{{ deptName(t.departmentId) }}</td>
+            <td class="hidden border-y border-line bg-surface px-3 py-2.5 group-hover:border-highlight lg:table-cell">{{ deptName(t.departmentId) }}</td>
             <td class="rounded-r-xl border-y border-r border-line bg-surface px-3 py-2.5 group-hover:border-highlight" :class="{ 'font-bold text-red-600': dueState(t) === 'overdue' }">{{ formatDate(t.dueDate) || '—' }}</td>
           </tr>
         </tbody>

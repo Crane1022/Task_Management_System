@@ -35,7 +35,7 @@ export const useDashboardStore = defineStore('dashboards', () => {
   function stop() { unsub?.(); unsub = null }
 
   async function run(fn, msg) {
-    try { return await fn() } catch (e) { console.error(e); ui.toast(`${msg}: ${e.code ?? e.message}`, 'error') }
+    try { return await ui.track(fn) } catch (e) { console.error(e); ui.toast(`${msg}: ${e.code ?? e.message}`, 'error') }
   }
   const select = (id) => (activeId.value = id)
   const save = (changes) => run(() => saveDashboard(active.value.id, changes), 'Could not save dashboard')

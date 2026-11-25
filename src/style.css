@@ -44,6 +44,19 @@
   .btn-ghost { @apply btn border border-line bg-surface text-ink hover:bg-bg; }
   .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700; }
   .label { @apply mb-1 block text-xs font-semibold text-muted; }
+  /* a row of filters/tabs: on a phone it scrolls sideways in one line instead of wrapping onto many lines;
+     from 640 px its items join the surrounding row as before (25 Nov 2026) */
+  .scroll-row { @apply -mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-1 sm:contents; scrollbar-width: none; }
+  .scroll-row::-webkit-scrollbar { display: none; }
+  .scroll-row > * { flex-shrink: 0; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+/* phones (25 Nov 2026): 16 px text in fields stops iPhones zooming in when a field is tapped, and buttons are at least
+   44 px tall so they are easy to hit with a thumb */
+@media (max-width: 639px) {
+  .input { font-size: 16px; min-height: 44px; }
+  .btn { min-height: 44px; }
 }
 .drag-ghost { opacity: 0.35; }
 .col-ghost { opacity: 0.5; outline: 2px dashed var(--highlight); outline-offset: 2px; }
@@ -66,6 +79,9 @@ main > * { animation: rise 0.32s var(--ease) backwards; }
 .fixed.inset-0[class*='bg-black'] { animation: fade 0.2s ease-out backwards; }
 [role='dialog'], [role='alertdialog'] { animation: pop 0.26s var(--ease) backwards; }
 .slide-panel { animation: slide-in 0.3s var(--ease) backwards; }
+/* phone sheets rise from the bottom (25 Nov 2026) */
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+.sheet { animation: sheet-up 0.28s var(--ease) backwards; }
 /* menus and the nested workspace links open downward */
 [role='menu'], .reveal { animation: drop-in 0.18s var(--ease) backwards; transform-origin: top; }
 /* task cards: rise in when they appear, lift on hover, and feel picked up while dragged */
@@ -85,17 +101,17 @@ main > * { animation: rise 0.32s var(--ease) backwards; }
 .btn:active { transform: scale(0.97); }
 /* loading buttons (24 Nov 2026, v-busy): a spinner takes the place of the icon and the button stays solid
    (not faded like a disabled button) so it reads as "working", not "not allowed" */
-.btn.is-busy { cursor: progress; opacity: 1 !important; transform: none; }
-.btn.is-busy > svg { display: none; }
-.btn.is-busy::before {
+.is-busy { cursor: progress; opacity: 1 !important; transform: none; }
+.is-busy > svg { display: none; }
+.is-busy::before {
   content: ''; flex: none; width: 1em; height: 1em; border-radius: 9999px;
   border: 2px solid currentColor; border-right-color: transparent;
   animation: btn-spin 0.7s linear infinite !important;
 }
 @keyframes btn-spin { to { transform: rotate(360deg); } }
 /* with Reduce motion the spinner turns slowly instead of stopping, so it still says "working" */
-.reduce-motion .btn.is-busy::before { animation-duration: 1.6s !important; }
-@media (prefers-reduced-motion: reduce) { .btn.is-busy::before { animation-duration: 1.6s !important; } }
+.reduce-motion .is-busy::before { animation-duration: 1.6s !important; }
+@media (prefers-reduced-motion: reduce) { .is-busy::before { animation-duration: 1.6s !important; } }
 .btn { transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), opacity 0.2s var(--ease), transform 0.12s var(--ease); }
 .input { transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background-color 0.2s var(--ease); }
 .input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
