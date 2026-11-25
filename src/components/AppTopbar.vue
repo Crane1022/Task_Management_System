@@ -30,7 +30,11 @@ async function signOut() {
 // over the bar; it stays open while there is something typed in it.
 const TITLES = {
   dashboard: 'Dashboard', board: 'Kanban board', 'board-by-id': 'Kanban board', 'my-tasks': 'My tasks', list: 'List',
+<<<<<<< HEAD
   staff: 'Staff', festive: 'Festive events', profile: 'Profile', companion: 'My companion', appearance: 'Appearance',
+=======
+  staff: 'Staff', profile: 'Profile', companion: 'My companion', appearance: 'Appearance',
+>>>>>>> 8148681578f78d7719c63ef3fa6a07ddbdf3948a
 }
 const title = computed(() => {
   if (route.params.wid) return wsStore.workspaces.find((w) => w.id === route.params.wid)?.name ?? 'Workspace'

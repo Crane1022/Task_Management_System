@@ -14,8 +14,11 @@ import PetCompanion from '@/components/PetCompanion.vue'
 import BottomNav from '@/components/BottomNav.vue'
 import TopProgress from '@/components/TopProgress.vue'
 import PawLoader from '@/components/PawLoader.vue'
+<<<<<<< HEAD
 import FestiveLayer from '@/components/FestiveLayer.vue'
 import { useFestiveStore } from '@/stores/festive'
+=======
+>>>>>>> 8148681578f78d7719c63ef3fa6a07ddbdf3948a
 import { ref } from 'vue'
 import { setDisplayTimeZone } from '@/utils/dates'
 
@@ -61,6 +64,9 @@ watch(() => auth.user, (u) => { if (!u && !route.meta.public) router.push('/logi
   </div>
   <BottomNav v-if="ready && !bare && auth.user" />
   <PetCompanion v-if="ready && !bare && auth.user" />
+<<<<<<< HEAD
   <FestiveLayer v-if="ready && !bare && auth.user" />
+=======
+>>>>>>> 8148681578f78d7719c63ef3fa6a07ddbdf3948a
   <ToastHost />
 </template>

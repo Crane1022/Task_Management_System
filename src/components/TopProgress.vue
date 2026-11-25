@@ -31,6 +31,10 @@ watch(working, (on) => {
 @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 /* Reduce motion: the bar pulses gently in place instead of sliding */
 @media (prefers-reduced-motion: reduce) { .bar { width: 100%; animation: pulse 1.6s ease-in-out infinite !important; } }
+<<<<<<< HEAD
 .reduce-motion .bar { width: 100%; animation: pulse 1.6s ease-in-out infinite !important; }
+=======
+:global(.reduce-motion) .bar { width: 100%; animation: pulse 1.6s ease-in-out infinite !important; }
+>>>>>>> 8148681578f78d7719c63ef3fa6a07ddbdf3948a
 @keyframes pulse { 50% { opacity: 0.45; } }
 </style>

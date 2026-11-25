@@ -124,9 +124,12 @@ async function signOut() { await auth.logout(); router.push('/login') }
         <component :is="l.icon" class="h-[18px] w-[18px] shrink-0" />
         <span :class="ui.rail && 'sm:hidden'">{{ l.label }}</span>
 <<<<<<< HEAD
+<<<<<<< HEAD
         <!-- dropdown arrow: points right when closed, turns to point down when open -->
         <ChevronRight v-if="l.to === '/settings/companion' && auth.isAdmin" class="ml-auto h-4 w-4 shrink-0 transition-transform duration-200" :class="[companionOpen && 'rotate-90', ui.rail && 'sm:hidden']" aria-hidden="true" />
 =======
+=======
+>>>>>>> 8148681578f78d7719c63ef3fa6a07ddbdf3948a
       </router-link>
       <!-- Directors: Festive events sits under My companion, a step in. Hidden until My companion is opened; stays while on either page -->
       <router-link
