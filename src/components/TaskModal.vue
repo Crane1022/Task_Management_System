@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { X, Plus, Trash2, Bold, List, ListOrdered } from 'lucide-vue-next'
+import { X, Plus, Trash2, Bold, List, ListOrdered, ArrowLeft } from 'lucide-vue-next'
 import { PRIORITIES, pickableDepartments, deptName, displayOf } from '@/utils/constants'
 import { toInput, fromInput } from '@/utils/dates'
 import ConfirmDialog from './ConfirmDialog.vue'
+import { useUiStore } from '@/stores/ui'
 import TaskAttachments from './TaskAttachments.vue'
 import RichText from './RichText.vue'
 import { toggleBold, toggleList, continueList } from '@/utils/richText'
@@ -44,10 +45,11 @@ const emit = defineEmits(['close'])
 // What the panel is busy doing: '' | 'save' | 'delete' | 'move'. While busy the form is locked, the buttons can't
 // be pressed twice and the panel can't be closed (the write is still going).
 const busy = ref('')
+const uiBar = useUiStore() // the loading bar at the top moves while the panel saves, deletes or moves
 async function runBusy(kind, fn, ...args) {
   if (busy.value || !fn) return
   busy.value = kind
-  try { await fn(...args) } catch (e) { console.error(e) } finally { busy.value = '' } // on success the parent closes the panel; on failure it stays open
+  try { await uiBar.track(() => fn(...args)) } catch (e) { console.error(e) } finally { busy.value = '' } // on success the parent closes the panel; on failure it stays open
 }
 const saveLabel = computed(() => {
   if (busy.value === 'save') return t ? 'Saving…' : ticketBoard.value ? 'Raising ticket…' : 'Creating…'
@@ -244,13 +246,15 @@ const doMove = (d, c) => runBusy('move', props.onMove, d, c)
 
 <template>
   <div class="fixed inset-0 z-50 flex justify-end bg-black/40" @mousedown="onBackdropDown" @click="onBackdropClick">
-    <form class="task-panel flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
-      <header class="flex items-center justify-between border-b border-line px-5 py-3">
-        <h2 class="text-base font-extrabold">{{ t ? 'Task details' : 'New task' }}</h2>
-        <button type="button" class="rounded p-1 text-muted hover:bg-bg disabled:opacity-50" aria-label="Close" :disabled="!!busy" @click="requestClose"><X class="h-5 w-5" /></button>
+    <form class="task-panel flex h-[100dvh] w-full max-w-xl flex-col bg-surface shadow-2xl" @submit.prevent="submit">
+      <header class="flex items-center gap-1 border-b border-line px-2 py-2 sm:justify-between sm:px-5 sm:py-3">
+        <!-- phone: a back arrow on the left, like other phone apps (25 Nov 2026) -->
+        <button type="button" class="grid h-11 w-11 place-items-center rounded-lg text-ink hover:bg-bg disabled:opacity-50 sm:hidden" aria-label="Back" :disabled="!!busy" @click="requestClose"><ArrowLeft class="h-[22px] w-[22px]" /></button>
+        <h2 class="flex-1 text-base font-extrabold sm:flex-none">{{ t ? 'Task details' : 'New task' }}</h2>
+        <button type="button" class="hidden rounded p-1 text-muted hover:bg-bg disabled:opacity-50 sm:block" aria-label="Close" :disabled="!!busy" @click="requestClose"><X class="h-5 w-5" /></button>
       </header>
 
-      <fieldset :disabled="readonly || !!busy" :aria-busy="!!busy || null" class="min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <fieldset :disabled="readonly || !!busy" :aria-busy="!!busy || null" class="min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
         <div>
           <label class="label" for="t-title">Title</label>
           <input id="t-title" v-model="form.title" class="input text-base font-bold" maxlength="200" :placeholder="ticketBoard ? 'e.g. Aircond leaking in master bedroom' : 'e.g. Prepare Unit A101 for new tenant'" autofocus />
@@ -340,12 +344,12 @@ const doMove = (d, c) => runBusy('move', props.onMove, d, c)
         </template>
       </fieldset>
 
-      <footer class="flex items-center justify-between border-t border-line px-5 py-3">
-        <button v-if="t && mayDelete" type="button" class="btn-ghost text-red-600" :disabled="!!busy" @click="confirmDelete = true"><Trash2 class="h-4 w-4" />Delete</button>
-        <span v-else />
-        <div class="flex gap-2">
-          <button type="button" class="btn-ghost" :disabled="!!busy" @click="requestClose">Cancel</button>
-          <button v-if="!readonly" v-busy="busy === 'save'" class="btn-primary min-w-[8.5rem]" :disabled="!!busy && busy !== 'save'">{{ saveLabel }}</button>
+      <footer class="flex items-center justify-between gap-2 border-t border-line px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-5 sm:pb-3">
+        <button v-if="t && mayDelete" v-busy="busy === 'delete'" type="button" class="btn-ghost text-red-600" :disabled="!!busy && busy !== 'delete'" :aria-label="busy === 'delete' ? 'Deleting' : 'Delete'" @click="confirmDelete = true"><Trash2 class="h-4 w-4" /><span class="hidden sm:inline">{{ busy === 'delete' ? 'Deleting…' : 'Delete' }}</span></button>
+        <span v-else class="hidden sm:block" />
+        <div class="flex flex-1 justify-end gap-2 sm:flex-none">
+          <button type="button" class="btn-ghost hidden sm:inline-flex" :disabled="!!busy" @click="requestClose">Cancel</button>
+          <button v-if="!readonly" v-busy="busy === 'save'" class="btn-primary min-w-[8.5rem] flex-1 sm:flex-none" :disabled="!!busy && busy !== 'save'">{{ saveLabel }}</button>
         </div>
       </footer>
     </form>

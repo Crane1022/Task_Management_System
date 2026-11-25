@@ -70,7 +70,8 @@ export const useCompanionStore = defineStore('companion', () => {
 
   // ----- saving -----
   // `pending` = { custom, face }: a Blob to store, null to delete, undefined to leave as it is
-  async function save(draft, pending = {}) {
+  const save = (draft, pending) => ui.track(() => saveNow(draft, pending)) // the loading bar moves while it saves
+  async function saveNow(draft, pending = {}) {
     if (!uid) return false
     try {
       const next = normalizeSettings(rememberRecent(draft, draft.animalId))

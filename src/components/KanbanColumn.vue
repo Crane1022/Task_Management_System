@@ -8,7 +8,7 @@ import CatPeek from './CatPeek.vue'
 import ColumnMenu from './ColumnMenu.vue'
 
 const props = defineProps({ column: Object, tasks: Array, total: Number, users: Object, canManage: Boolean, canDelete: Boolean, canEdit: { type: Boolean, default: true }, cat: String, labelFor: Function, virtual: Boolean })
-const emit = defineEmits(['open', 'add', 'drop', 'rename', 'update', 'archive', 'delete'])
+const emit = defineEmits(['open', 'add', 'drop', 'rename', 'update', 'archive', 'delete', 'move'])
 
 // Local copy so the library can reorder it while dragging; it resets whenever Firestore pushes new data.
 const list = ref([...props.tasks])
@@ -34,12 +34,12 @@ function onDrop(evt) {
 </script>
 
 <template>
-  <section class="relative flex max-h-full w-72 shrink-0 flex-col rounded-2xl border border-line bg-surface">
+  <section class="relative flex max-h-full w-[calc(100vw-2rem)] shrink-0 snap-start flex-col rounded-2xl border border-line bg-surface sm:w-72">
     <CatPeek v-if="cat" :variant="cat" />
     <div v-if="color" class="mx-3 mt-3 h-1 rounded-full" :style="{ background: color }" />
 
     <header class="flex items-center gap-1 px-2 pb-1" :class="color ? 'pt-2' : 'pt-3'">
-      <button v-if="canEdit && !virtual" class="col-handle cursor-grab touch-none rounded p-1 text-muted hover:bg-bg active:cursor-grabbing" title="Drag to reorder this column" aria-label="Drag to reorder this column"><GripVertical class="h-4 w-4" /></button>
+      <button v-if="canEdit && !virtual" class="col-handle hidden cursor-grab touch-none rounded p-1 sm:block text-muted hover:bg-bg active:cursor-grabbing" title="Drag to reorder this column" aria-label="Drag to reorder this column"><GripVertical class="h-4 w-4" /></button>
       <template v-if="!editing">
         <h2 class="min-w-0 flex-1 whitespace-normal break-words text-xs font-extrabold leading-relaxed tracking-wide">
           {{ column.name }}
@@ -59,11 +59,11 @@ function onDrop(evt) {
     </header>
 
     <VueDraggable
-      v-model="list" :group="virtual ? { name: 'tasks', put: false } : 'tasks'" :disabled="!canEdit && !virtual" :animation="150" ghost-class="drag-ghost"
+      v-model="list" :group="virtual ? { name: 'tasks', put: false } : 'tasks'" :disabled="!canEdit && !virtual" :animation="150" :delay="220" :delay-on-touch-only="true" ghost-class="drag-ghost"
       class="flex min-h-[80px] flex-1 flex-col gap-2 overflow-y-auto p-3"
       :data-column-id="column.id" @add="onDrop" @update="onDrop"
     >
-      <TaskCard v-for="t in list" :key="t.id" :data-id="t.id" :task="t" :users="users" :board-label="labelFor ? labelFor(t) : ''" @click="emit('open', t)" />
+      <TaskCard v-for="t in list" :key="t.id" :data-id="t.id" :task="t" :users="users" :board-label="labelFor ? labelFor(t) : ''" @click="emit('open', t)" :can-move="canEdit && !virtual" @move="emit('move', t)" />
     </VueDraggable>
     <p v-if="!list.length" class="-mt-14 px-3 pb-6 text-center text-xs text-muted">No tasks here. Drop one in or press +.</p>
   </section>

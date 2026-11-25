@@ -51,7 +51,7 @@ async function toggle() {
     </button>
   </div>
   <div v-if="supported" class="px-3 pb-2.5">
-    <button type="button" class="text-[11px] font-bold text-accent disabled:opacity-50" :disabled="testing" @click="test">{{ testing ? 'Testing…' : 'Send test pop-up' }}</button>
+    <button v-busy="testing" type="button" class="inline-flex items-center gap-1 text-[11px] font-bold text-accent" @click="test">{{ testing ? 'Testing…' : 'Send test pop-up' }}</button>
     <ul v-if="results.length" class="mt-1 space-y-0.5 text-[11px]" aria-live="polite">
       <li v-for="(r, i) in results" :key="i" :class="r.ok ? 'text-muted' : 'font-semibold text-red-600'">{{ r.ok ? '✓' : '✗' }} {{ r.text }}</li>
     </ul>

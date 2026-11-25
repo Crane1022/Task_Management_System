@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -19,6 +20,8 @@ const router = createRouter({
     { path: '/b/:bid', name: 'board-by-id', component: () => import('@/views/BoardView.vue'), meta: { tasks: true, page: 'board' } },
     // Director (super_admin) only: departments and roles of PMS staff (accounts themselves are made in the PMS)
     { path: '/staff', name: 'staff', component: () => import('@/views/StaffView.vue'), meta: { admin: true } },
+    // Director only (25 Nov 2026): festivals, outfits, decorations and who sees them
+    { path: '/festive', name: 'festive', component: () => import('@/views/FestiveView.vue'), meta: { admin: true } },
     { path: '/settings/profile', name: 'profile', component: () => import('@/views/ProfileView.vue') },
     { path: '/settings/companion', name: 'companion', component: () => import('@/views/CompanionView.vue') },
     { path: '/settings/appearance', name: 'appearance', component: () => import('@/views/AppearanceView.vue') },
@@ -27,6 +30,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from) => {
+  useUiStore().navigating = true // the loading bar moves until the page has opened (afterEach / onError)
   const auth = useAuthStore()
   await auth.init()
   const signedIn = !!(auth.user && auth.profile) // a profile is made by the PMS sign-in (api/pms-login.js)
@@ -37,5 +41,8 @@ router.beforeEach(async (to, from) => {
   const landing = auth.profile?.landingPage
   if (to.name === 'dashboard' && (from === START_LOCATION || from.name === 'login') && landing && landing !== 'dashboard') return { name: landing }
 })
+
+router.afterEach(() => { useUiStore().navigating = false })
+router.onError(() => { useUiStore().navigating = false })
 
 export default router

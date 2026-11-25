@@ -39,7 +39,8 @@ async function go(n) {
     </button>
     <template v-if="open">
       <div class="fixed inset-0 z-20" @click="open = false" />
-      <div class="absolute right-0 top-full z-30 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface shadow-xl" role="dialog" aria-label="Notifications">
+      <!-- phone (25 Nov 2026): the panel spans the screen under the top bar; it used to line up with the bell's right edge and ran off the left side -->
+      <div class="fixed inset-x-2 top-[3.75rem] z-30 rounded-xl border border-line bg-surface shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(24rem,calc(100vw-2rem))]" role="dialog" aria-label="Notifications">
         <div class="flex items-center gap-2 border-b border-line px-3 py-2">
           <p class="flex-1 text-sm font-extrabold">Notifications</p>
           <button v-if="store.unread" class="btn-ghost px-2 py-1 text-xs" @click="store.readAll()"><CheckCheck class="h-3.5 w-3.5" />Mark all read</button>
@@ -48,7 +49,7 @@ async function go(n) {
         <p v-if="store.failed" class="px-3 py-6 text-center text-sm font-semibold text-red-600" role="alert">Notifications could not be loaded.</p>
         <PawLoader v-else-if="store.loading" text="Loading notifications…" />
         <p v-else-if="!store.items.length" class="px-3 py-8 text-center text-sm text-muted">You are all caught up.</p>
-        <ul v-else class="max-h-[26rem] divide-y divide-line overflow-auto">
+        <ul v-else class="max-h-[min(26rem,calc(100dvh-16rem))] divide-y divide-line overflow-auto overscroll-contain sm:max-h-[26rem]">
           <li v-for="n in store.items" :key="n.id" class="group relative">
             <button class="flex w-full items-start gap-3 px-3 py-2.5 pr-9 text-left hover:bg-bg" :class="n.read ? '' : 'bg-accent-soft/40'" @click="go(n)">
               <span class="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-accent"><component :is="ICONS[n.type] ?? Bell" class="h-3.5 w-3.5" /></span>

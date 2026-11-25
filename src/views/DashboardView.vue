@@ -55,24 +55,26 @@ const catFor = (i) => (i % 3 === 0 ? CATS[(i / 3) % CATS.length] : '')
 
 <template>
   <div class="h-full overflow-y-auto">
-    <div class="mx-auto max-w-7xl px-4 pb-10 pt-4">
+    <div class="mx-auto max-w-7xl px-4 pb-10 pt-3 sm:pt-4">
       <div class="flex flex-wrap items-center gap-2">
-        <h1 class="mr-2 text-lg font-extrabold">Dashboard</h1>
+        <h1 class="mr-2 hidden text-lg font-extrabold sm:block">Dashboard</h1>
         <BoardPicker />
-        <button v-for="d in dash.list" :key="d.id" class="rounded-full border px-3 py-1 text-sm font-bold"
+        <div class="scroll-row order-last sm:order-none">
+        <button v-for="d in dash.list" :key="d.id" class="min-h-[40px] rounded-full border px-3 py-1 text-sm font-bold sm:min-h-0"
           :class="d.id === dash.active?.id ? 'border-accent bg-accent text-on-primary' : 'border-line bg-surface text-muted hover:text-ink'" @click="dash.select(d.id)">{{ d.name }}</button>
         <form v-if="creating" @submit.prevent="createDash">
           <input v-model="newName" class="input w-44 py-1" placeholder="Dashboard name" aria-label="New dashboard name" autofocus @keydown.esc="creating = false" />
         </form>
         <button v-else class="btn-ghost px-2.5 py-1" title="New dashboard" aria-label="New dashboard" @click="creating = true"><Plus class="h-4 w-4" /></button>
+        </div>
         <button v-if="dash.active" class="btn-ghost ml-auto" :class="editing && 'border-accent text-accent'" @click="editing = !editing"><Settings2 class="h-4 w-4" />{{ editing ? 'Done' : 'Customize' }}</button>
       </div>
 
-      <div class="mt-3 flex flex-wrap items-center gap-2">
+      <div class="mt-3 flex flex-wrap items-center gap-2"><div class="scroll-row">
         <select v-model="scope.assignee" class="input w-44" aria-label="Employee"><option value="">All employees</option><option v-for="u in people" :key="u.id" :value="u.id">{{ displayOf(u) }}</option></select>
         <select v-if="auth.isAdmin" v-model="scope.department" class="input w-44" aria-label="Department"><option value="">All departments</option><option v-for="d in DEPARTMENTS" :key="d.id" :value="d.id">{{ deptName(d.id) }}</option></select>
         <select v-model.number="scope.days" class="input w-44" aria-label="Date range"><option :value="0">Any time</option><option :value="7">Created in last 7 days</option><option :value="30">Last 30 days</option><option :value="90">Last 90 days</option></select>
-      </div>
+      </div></div>
 
       <section v-if="editing && dash.active" class="mt-4 space-y-4 rounded-2xl border border-dashed border-accent bg-surface p-4">
         <div class="flex flex-wrap items-end gap-4">
@@ -92,13 +94,13 @@ const catFor = (i) => (i % 3 === 0 ? CATS[(i / 3) % CATS.length] : '')
         <p class="text-xs text-muted">Drag widgets to reorder them. Use S / M / L to resize and edit a title to rename it. Changes save automatically.</p>
       </section>
 
-      <div v-if="dash.loading || board.loading" class="mt-8 grid gap-4 md:grid-cols-4"><div v-for="n in 4" :key="n" class="skeleton h-28" /></div>
+      <div v-if="dash.loading || board.loading" class="mt-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4" role="status" aria-label="Loading the dashboard"><div v-for="n in 4" :key="n" class="skeleton h-28" /></div>
       <div v-else-if="dash.error || board.error" class="mt-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200" role="alert">
         <p class="font-bold">The dashboard could not load.</p><p class="mt-1">{{ dash.error || board.error }}</p>
       </div>
       <template v-else-if="dash.active">
         <VueDraggable v-model="list" :disabled="!editing" :animation="150" filter="input, button" :prevent-on-filter="false" ghost-class="drag-ghost"
-          class="mt-9 grid grid-cols-1 gap-x-4 gap-y-9 md:grid-cols-6 lg:grid-cols-12" @end="saveOrder">
+          class="mt-9 grid grid-cols-2 gap-x-3 gap-y-9 sm:gap-x-4 md:grid-cols-6 lg:grid-cols-12" @end="saveOrder">
           <DashboardWidget v-for="(w, i) in list" :key="w.id" :class="SIZE_CLASS[w.size]" :widget="w" :stats="stats" :scope="scope" :editing="editing" :cat="catFor(i)"
             @update="(patch) => updateWidget(w.id, patch)" @remove="removeWidget(w.id)" />
         </VueDraggable>
