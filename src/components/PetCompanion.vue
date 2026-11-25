@@ -19,7 +19,9 @@ const router = useRouter()
 
 const s = computed(() => store.settings)
 const vw = ref(window.innerWidth)
-const vh = ref(window.innerHeight)
+// on a phone the pet stays above the bottom bar (25 Nov 2026)
+const usableHeight = () => window.innerHeight - (window.matchMedia('(max-width: 639px)').matches ? 76 : 0)
+const vh = ref(usableHeight())
 const size = computed(() => fitSize(s.value.size, vw.value, vh.value))
 const dragPos = ref(null)
 const pos = computed(() => dragPos.value ?? toPixels(s.value.position, size.value, vw.value, vh.value))
@@ -140,7 +142,7 @@ function leave() { hover.value = false; later(() => { if (!hover.value && !bubbl
 
 // ----- window size, activity, greeting -----
 let raf = 0
-const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { vw.value = window.innerWidth; vh.value = window.innerHeight }) }
+const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { vw.value = window.innerWidth; vh.value = usableHeight() }) }
 // moving the mouse or scrolling also counts as being here (checked at most once a second, so it stays cheap)
 let lastNudge = 0
 function nudge() {

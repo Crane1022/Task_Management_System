@@ -258,8 +258,9 @@ export const useBoardStore = defineStore('board', () => {
   }
 
   // `onFail` puts the screen back to what is saved, e.g. a card that was dragged but refused by the server
+  // every save goes through here, so the loading bar at the top moves while it runs (25 Nov 2026)
   async function run(fn, errorMessage, onFail) {
-    try { return await fn() } catch (e) {
+    try { return await ui.track(fn) } catch (e) {
       console.error(e)
       ui.toast(`${errorMessage}: ${e.code ?? e.message}`, 'error')
       onFail?.()

@@ -81,7 +81,7 @@ defineExpose({ startNewFolder, expand })
 
 <template>
   <div>
-    <form v-if="adding" class="flex items-center gap-1 px-2 pb-1" :class="props.collapsed && 'md:hidden'" @submit.prevent="commitNew">
+    <form v-if="adding" class="flex items-center gap-1 px-2 pb-1" :class="props.collapsed && 'sm:hidden'" @submit.prevent="commitNew">
       <input v-model="newName" class="input h-8 min-w-0 flex-1 py-1 text-sm" :maxlength="MAX_FOLDER_NAME" placeholder="Folder name" aria-label="New folder name" autofocus @keydown.esc="adding = false" />
       <button class="btn-primary px-2.5 py-1 text-xs">Add</button>
     </form>
@@ -91,17 +91,17 @@ defineExpose({ startNewFolder, expand })
         <!-- a workspace -->
         <template v-if="e.kind === 'ws'">
           <div class="flex items-start">
-            <span class="grip mt-2 cursor-grab touch-none text-muted/60 hover:text-ink" :class="props.collapsed && 'md:hidden'" title="Drag to move" aria-hidden="true"><GripVertical class="h-3.5 w-3.5" /></span>
+            <span class="grip mt-2 cursor-grab touch-none text-muted/60 hover:text-ink" :class="props.collapsed && 'sm:hidden'" title="Drag to move" aria-hidden="true"><GripVertical class="h-3.5 w-3.5" /></span>
             <router-link :to="`/workspaces/${e.ws.id}`" exact-active-class="bg-accent-soft text-accent" class="flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-muted hover:bg-bg" :title="e.ws.name" @click="emit('navigate')">
               <WorkspaceAvatar :workspace="e.ws" :size="22" class="shrink-0" />
-              <span :class="[isOpen(e.ws.id) ? 'break-words' : 'truncate', props.collapsed && 'md:hidden']" style="min-width:0">{{ e.ws.name }}</span>
-              <Lock v-if="e.ws.superPrivate" class="mt-0.5 h-3 w-3 shrink-0" :class="props.collapsed && 'md:hidden'" title="Super Private" aria-label="Super Private" />
+              <span :class="[isOpen(e.ws.id) ? 'break-words' : 'truncate', props.collapsed && 'sm:hidden']" style="min-width:0">{{ e.ws.name }}</span>
+              <Lock v-if="e.ws.superPrivate" class="mt-0.5 h-3 w-3 shrink-0" :class="props.collapsed && 'sm:hidden'" title="Super Private" aria-label="Super Private" />
             </router-link>
-            <button class="mt-1 rounded p-1 text-muted hover:bg-bg" :class="props.collapsed && 'md:hidden'" :aria-expanded="isOpen(e.ws.id)" :aria-label="`${isOpen(e.ws.id) ? 'Hide full name and links for' : 'Show full name and links for'} ${e.ws.name}`" @click="toggleWs(e.ws.id)">
+            <button class="mt-1 rounded p-1 text-muted hover:bg-bg" :class="props.collapsed && 'sm:hidden'" :aria-expanded="isOpen(e.ws.id)" :aria-label="`${isOpen(e.ws.id) ? 'Hide full name and links for' : 'Show full name and links for'} ${e.ws.name}`" @click="toggleWs(e.ws.id)">
               <component :is="isOpen(e.ws.id) ? ChevronDown : ChevronRight" class="h-4 w-4" />
             </button>
           </div>
-          <div class="collapsible" :class="[isOpen(e.ws.id) && 'open', props.collapsed && 'md:hidden']" :inert="isOpen(e.ws.id) ? null : ''">
+          <div class="collapsible" :class="[isOpen(e.ws.id) && 'open', props.collapsed && 'sm:hidden']" :inert="isOpen(e.ws.id) ? null : ''">
             <div class="collapsible-clip">
               <div class="sub-links ml-[34px] space-y-0.5 border-l border-line pl-2">
                 <router-link v-for="s in [{ p: '', l: 'Boards' }, { p: '/members', l: 'Members' }, { p: '/settings', l: 'Settings' }]" :key="s.l" :to="`/workspaces/${e.ws.id}${s.p}`"
@@ -114,21 +114,21 @@ defineExpose({ startNewFolder, expand })
         <!-- a folder -->
         <template v-else>
           <div class="group flex items-center rounded-lg hover:bg-bg">
-            <span class="grip cursor-grab touch-none text-muted/60 hover:text-ink" :class="props.collapsed && 'md:hidden'" title="Drag to move" aria-hidden="true"><GripVertical class="h-3.5 w-3.5" /></span>
+            <span class="grip cursor-grab touch-none text-muted/60 hover:text-ink" :class="props.collapsed && 'sm:hidden'" title="Drag to move" aria-hidden="true"><GripVertical class="h-3.5 w-3.5" /></span>
             <form v-if="editing?.id === e.id" class="flex min-w-0 flex-1 items-center gap-1 py-0.5" @submit.prevent="commitRename">
               <input v-model="editing.text" class="input h-7 min-w-0 flex-1 py-0.5 text-sm" :maxlength="MAX_FOLDER_NAME" :aria-label="`Rename folder ${e.name}`" autofocus @keydown.esc="editing = null" @blur="commitRename" />
             </form>
             <button v-else type="button" class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold text-muted" :aria-expanded="folderOpen(e.id)" :title="e.name" @click="toggleFolder(e.id)">
               <component :is="folderOpen(e.id) ? FolderOpen : Folder" class="h-[18px] w-[18px] shrink-0" />
-              <span class="min-w-0 truncate" :class="props.collapsed && 'md:hidden'">{{ e.name }}</span>
-              <span class="ml-auto shrink-0 text-xs font-semibold text-muted/70" :class="props.collapsed && 'md:hidden'">{{ e.items.length }}</span>
+              <span class="min-w-0 truncate" :class="props.collapsed && 'sm:hidden'">{{ e.name }}</span>
+              <span class="ml-auto shrink-0 text-xs font-semibold text-muted/70" :class="props.collapsed && 'sm:hidden'">{{ e.items.length }}</span>
             </button>
             <template v-if="editing?.id !== e.id">
-              <button class="rounded p-1 text-muted opacity-60 hover:bg-bg hover:text-ink focus:opacity-100 group-hover:opacity-100" :class="props.collapsed && 'md:hidden'" :aria-label="`Rename folder ${e.name}`" title="Rename" @click="startRename(e)"><Pencil class="h-3.5 w-3.5" /></button>
-              <button class="rounded p-1 text-muted opacity-60 hover:bg-bg hover:text-red-600 focus:opacity-100 group-hover:opacity-100" :class="props.collapsed && 'md:hidden'" :aria-label="`Delete folder ${e.name}`" title="Delete folder (its workspaces stay)" @click="removeFolder(e)"><Trash2 class="h-3.5 w-3.5" /></button>
+              <button class="rounded p-1 text-muted opacity-60 hover:bg-bg hover:text-ink focus:opacity-100 group-hover:opacity-100" :class="props.collapsed && 'sm:hidden'" :aria-label="`Rename folder ${e.name}`" title="Rename" @click="startRename(e)"><Pencil class="h-3.5 w-3.5" /></button>
+              <button class="rounded p-1 text-muted opacity-60 hover:bg-bg hover:text-red-600 focus:opacity-100 group-hover:opacity-100" :class="props.collapsed && 'sm:hidden'" :aria-label="`Delete folder ${e.name}`" title="Delete folder (its workspaces stay)" @click="removeFolder(e)"><Trash2 class="h-3.5 w-3.5" /></button>
             </template>
           </div>
-          <div class="collapsible" :class="[folderOpen(e.id) && 'open', props.collapsed && 'md:hidden']" :inert="folderOpen(e.id) ? null : ''"><div class="collapsible-clip">
+          <div class="collapsible" :class="[folderOpen(e.id) && 'open', props.collapsed && 'sm:hidden']" :inert="folderOpen(e.id) ? null : ''"><div class="collapsible-clip">
           <VueDraggable v-model="e.items" class="folder-list sub-links ml-[18px] space-y-0.5 border-l border-line pl-1.5" :animation="150" handle=".grip" :group="folderGroup" ghost-class="opacity-40" @start="onStart" @end="onEnd">
             <div v-for="w in e.items" :key="w.id" class="ws-row" data-kind="ws">
               <div class="flex items-start">

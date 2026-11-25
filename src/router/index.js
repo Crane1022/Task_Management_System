@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, START_LOCATION } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,6 +28,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from) => {
+  useUiStore().navigating = true // the loading bar moves until the page has opened (afterEach / onError)
   const auth = useAuthStore()
   await auth.init()
   const signedIn = !!(auth.user && auth.profile) // a profile is made by the PMS sign-in (api/pms-login.js)
@@ -37,5 +39,8 @@ router.beforeEach(async (to, from) => {
   const landing = auth.profile?.landingPage
   if (to.name === 'dashboard' && (from === START_LOCATION || from.name === 'login') && landing && landing !== 'dashboard') return { name: landing }
 })
+
+router.afterEach(() => { useUiStore().navigating = false })
+router.onError(() => { useUiStore().navigating = false })
 
 export default router

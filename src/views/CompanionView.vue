@@ -321,7 +321,7 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
         <div class="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
           <button class="btn-ghost shadow-lg" :disabled="!dirty || saving" @click="cancel">Cancel</button>
           <button class="btn-ghost shadow-lg" :disabled="saving" @click="confirmAll = true">Reset to default</button>
-          <button class="btn-primary shadow-lg" :disabled="!dirty || saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
+          <button v-busy="saving" class="btn-primary shadow-lg" :disabled="!dirty && !saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
         </div>
       </div>
     </div>
