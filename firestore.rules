@@ -191,6 +191,43 @@ service cloud.firestore {
           || resource.data.createdBy == request.auth.uid)));
     }
 
+    // ---------- files uploaded to a task: kept in Firestore in pieces (see src/utils/files.js) ----------
+    // They follow the task: whoever can read the task can open them, whoever can edit the task can add or remove them.
+    function filePath(tid, fid) { return /databases/$(database)/documents/tasks/$(tid)/files/$(fid); }
+    function canEditTaskId(tid) { return exists(taskPath(tid)) && canEditTask(get(taskPath(tid)).data); }
+    match /tasks/{tid}/files/{fid} {
+      allow read: if signedIn() && exists(taskPath(tid)) && canReadTask(get(taskPath(tid)).data);
+      allow create: if hasProfile() && canEditTaskId(tid)
+        && request.resource.data.keys().hasOnly(['name', 'type', 'size', 'kind', 'chunks', 'complete', 'thumb', 'addedBy', 'createdAt'])
+        && request.resource.data.addedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.complete == false
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.type is string && request.resource.data.type.size() <= 120
+        && request.resource.data.kind is string && request.resource.data.kind.size() <= 20
+        && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 5242880
+        && request.resource.data.chunks is int && request.resource.data.chunks > 0 && request.resource.data.chunks <= 10
+        && (!('thumb' in request.resource.data) || (request.resource.data.thumb is string && request.resource.data.thumb.size() <= 20000));
+      // the uploader marks the file finished once every piece is saved
+      allow update: if hasProfile() && resource.data.addedBy == request.auth.uid && canEditTaskId(tid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['complete'])
+        && request.resource.data.complete == true;
+      allow delete: if hasProfile() && (!existsAfter(taskPath(tid)) || canEditTaskId(tid) || resource.data.addedBy == request.auth.uid);
+
+      match /chunks/{n} {
+        allow read: if signedIn() && exists(taskPath(tid)) && canReadTask(get(taskPath(tid)).data);
+        // pieces can only be added by the uploader, while the file is still being uploaded, and never changed afterwards
+        allow create: if hasProfile() && exists(filePath(tid, fid))
+          && get(filePath(tid, fid)).data.addedBy == request.auth.uid
+          && get(filePath(tid, fid)).data.complete == false
+          && n.matches('[0-9]{1,2}') && int(n) < get(filePath(tid, fid)).data.chunks
+          && request.resource.data.keys().hasOnly(['data'])
+          && request.resource.data.data is string && request.resource.data.data.size() <= 700000;
+        allow delete: if hasProfile() && (!existsAfter(taskPath(tid)) || canEditTaskId(tid)
+          || !exists(filePath(tid, fid)) || get(filePath(tid, fid)).data.addedBy == request.auth.uid);
+      }
+    }
+
     // ---------- task comments: they follow the task, so anyone who cannot read the task cannot read its comments ----------
     match /tasks/{tid}/comments/{cid} {
       allow read: if signedIn() && exists(taskPath(tid)) && canReadTask(get(taskPath(tid)).data);
@@ -410,6 +447,26 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid;
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
     }
+
+    // ---------- festive companion (25 Nov 2026) ----------
+    // festive/settings: the whole-company switches. Everyone signed in reads them; only a Director (super_admin) changes them.
+    match /festive/{docId} {
+      allow read: if hasProfile();
+      allow write: if isAdmin() && docId == 'settings';
+    }
+    // festive_events/{id}: one special day. audience 'all' = everyone; 'selected' = only the people in audienceIds
+    // (a Director picks them). Nobody else can even read a 'selected' event. Only Directors create, change or delete.
+    match /festive_events/{id} {
+      allow read: if isAdmin()
+        || (hasProfile() && (resource.data.audience == 'all' || request.auth.uid in resource.data.audienceIds));
+      allow create, update: if isAdmin()
+        && request.resource.data.audience in ['all', 'selected']
+        && request.resource.data.audienceIds is list
+        && request.resource.data.audienceIds.size() <= 500
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60;
+      allow delete: if isAdmin();
+    }
+    // (each person's wardrobe, pop-ups seen and birthday live in users/{uid}/settings/festive: the settings rule above)
 
     // ---------- reserved for the next phases ----------
     match /{collection}/{id} {

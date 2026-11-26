@@ -140,9 +140,10 @@ test('behaviour helpers', () => {
 import { PARTY_AFTER_MS, PARTY_MS, PARTY_LINES, pickParty, pickPartyLine, partyAllowed } from '../src/companions/behaviour.js'
 import { tuneNotes } from '../src/companions/sound.js'
 
-test('idle party: on by default, cleaned when loaded, and ends before the pet falls asleep', () => {
-  assert.equal(defaultSettings().behaviour.idleParty, true)
-  assert.equal(normalizeSettings({ behaviour: { idleParty: 'yes' } }).behaviour.idleParty, true)
+test('idle party: off by default (24 Nov 2026), cleaned when loaded, and ends before the pet falls asleep', () => {
+  assert.equal(defaultSettings().behaviour.idleParty, false)
+  assert.equal(normalizeSettings({ behaviour: { idleParty: 'yes' } }).behaviour.idleParty, false) // not a real true/false: off
+  assert.equal(normalizeSettings({ behaviour: { idleParty: true } }).behaviour.idleParty, true)
   assert.equal(normalizeSettings({ behaviour: { idleParty: false } }).behaviour.idleParty, false)
   assert.ok(PARTY_AFTER_MS + PARTY_MS < SLEEP_AFTER_MS)
 })
@@ -156,6 +157,7 @@ test('idle party: dance or sing, with a line to say', () => {
 
 test('idle party: only when shown, animated, switched on and the tab is in view', () => {
   const s = defaultSettings()
+  s.behaviour.idleParty = true
   assert.equal(partyAllowed(s, true, false), true)
   assert.equal(partyAllowed(s, false, false), false)
   assert.equal(partyAllowed(s, true, true), false)

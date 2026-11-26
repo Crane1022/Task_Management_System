@@ -133,7 +133,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
           <div class="space-y-2">
             <input ref="photoInput" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="onPhoto" />
             <div class="flex gap-2">
-              <button class="btn-ghost" :disabled="photoBusy" @click="photoInput.click()"><Camera class="h-4 w-4" />{{ me.photo ? 'Change photo' : 'Add photo' }}</button>
+              <button v-busy="photoBusy" class="btn-ghost" @click="photoInput.click()"><Camera class="h-4 w-4" />{{ me.photo ? 'Change photo' : 'Add photo' }}</button>
               <button v-if="me.photo" class="btn-ghost text-red-600" :disabled="photoBusy" @click="removePhoto"><Trash2 class="h-4 w-4" />Remove</button>
             </div>
             <p class="text-xs text-muted">JPG, PNG or WebP up to 5 MB. It is cropped to a small square.</p>
@@ -201,7 +201,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
           <div><label class="label" for="pw-new">New password</label><PasswordInput id="pw-new" v-model="pw.next" autocomplete="new-password" minlength="8" required /></div>
           <div><label class="label" for="pw-again">New password again</label><PasswordInput id="pw-again" v-model="pw.again" autocomplete="new-password" required /></div>
           <div class="flex flex-wrap items-center gap-2 sm:col-span-3">
-            <button class="btn-primary" :disabled="pwBusy">{{ pwBusy ? 'Changing…' : 'Change password' }}</button>
+            <button v-busy="pwBusy" class="btn-primary">{{ pwBusy ? 'Changing…' : 'Change password' }}</button>
             <button type="button" class="btn-ghost" @click="sendReset">Email me a reset link instead</button>
           </div>
           <p v-if="pwError" class="text-sm font-semibold text-red-600 sm:col-span-3" role="alert">{{ pwError }}</p>

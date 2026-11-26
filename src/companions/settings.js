@@ -1,6 +1,6 @@
 // Companion settings: defaults, cleaning of whatever is loaded, and helpers. No Firebase in here (testable).
 import { ANIMALS, CUSTOM_ID, DEFAULT_ANIMAL, PARTS, getAnimal, hasAnimal } from './registry.js'
-import { ACCESSORY_IDS } from './accessories.js'
+import { ACCESSORY_IDS, FESTIVE_ACCESSORY_IDS } from './accessories.js'
 
 export const VERSION = 1
 export const SIZE = { min: 56, max: 200, def: 96 }
@@ -13,6 +13,7 @@ export const defaultSettings = () => ({
   name: '',
   colors: {},
   accessory: 'none',
+  outfit: '', // festive outfit from the wardrobe, worn together with the accessory (25 Nov 2026)
   size: SIZE.def,
   position: { ...DEFAULT_POSITION },
   visible: true,
@@ -43,6 +44,8 @@ export function normalizeSettings(raw) {
     name: typeof raw.name === 'string' ? raw.name.trim().slice(0, NAME_MAX) : '',
     colors,
     accessory: ACCESSORY_IDS.includes(raw.accessory) ? raw.accessory : 'none',
+    // a festive outfit saved as the accessory by the first version moves to its own place
+    outfit: FESTIVE_ACCESSORY_IDS.includes(raw.outfit) ? raw.outfit : FESTIVE_ACCESSORY_IDS.includes(raw.accessory) ? raw.accessory : '',
     size: Math.round(num(raw.size, SIZE.min, SIZE.max, SIZE.def)),
     position: { x: num(raw.position?.x, 0, 1, d.position.x), y: num(raw.position?.y, 0, 1, d.position.y) },
     visible: bool(raw.visible, true),
@@ -88,7 +91,7 @@ export const toggleFavourite = (settings, animalId) => ({
 
 // ----- the resets -----
 export const resetColor = (s, part) => { const colors = { ...s.colors }; delete colors[part]; return { ...s, colors } }
-export const resetAppearance = (s) => ({ ...s, colors: {}, accessory: 'none', name: '' })
+export const resetAppearance = (s) => ({ ...s, colors: {}, accessory: 'none', outfit: '', name: '' })
 export const resetFace = (s) => ({ ...s, face: { ...defaultSettings().face } })
 export const resetPosition = (s) => ({ ...s, position: { ...DEFAULT_POSITION } })
 export const restoreOriginalAnimal = (s) => ({ ...selectAnimal(s, DEFAULT_ANIMAL), colors: {} })

@@ -108,7 +108,7 @@ async function adopt() {
 <template>
   <div ref="scroller" class="h-full overflow-y-auto">
     <PullIndicator :pull="pull" :busy="pulling" :threshold="threshold" />
-    <div v-if="store.loading" class="mx-auto max-w-6xl space-y-3 px-4 pt-6"><div class="skeleton h-20" /><div class="skeleton h-40" /></div>
+    <div v-if="store.loading" class="mx-auto max-w-6xl space-y-3 px-4 pt-6" role="status" aria-label="Loading the workspace"><div class="skeleton h-20" /><div class="skeleton h-40" /></div>
 
     <div v-else-if="!ws" class="grid h-full place-items-center p-6 text-center">
       <div class="max-w-sm">
@@ -132,25 +132,25 @@ async function adopt() {
             <span v-if="ws.archived" class="flex items-center gap-1 rounded-full bg-bg px-2.5 py-1 text-muted"><Archive class="h-3 w-3" />Archived</span>
           </div>
         </div>
-        <router-link :to="`/workspaces/${ws.id}/members`" class="flex items-center gap-2" :aria-label="`${memberUsers.length} members`">
+        <router-link :to="`/workspaces/${ws.id}/members`" class="flex w-full items-center gap-2 sm:w-auto" :aria-label="`${memberUsers.length} members`">
           <span class="flex -space-x-2"><span v-for="u in memberUsers.slice(0, 5)" :key="u.id" class="rounded-full border-2 border-surface"><UserAvatar :user="u" :size="30" /></span></span>
           <span class="text-xs font-bold text-muted">{{ Object.keys(ws.members ?? {}).length }} members</span>
         </router-link>
       </header>
 
-      <nav class="mt-5 flex gap-1 border-b border-line" aria-label="Workspace sections">
+      <nav class="no-scrollbar mt-5 flex gap-1 overflow-x-auto border-b border-line" aria-label="Workspace sections">
         <router-link v-for="t in [{ to: `/workspaces/${ws.id}`, label: 'Boards', key: 'boards' }, { to: `/workspaces/${ws.id}/members`, label: 'Members', key: 'members' }, ...(ws.superPrivate ? [{ to: `/workspaces/${ws.id}/chat`, label: 'Chat', key: 'chat' }] : []), { to: `/workspaces/${ws.id}/settings`, label: 'Settings', key: 'settings' }]"
-          :key="t.key" :to="t.to" class="-mb-px border-b-2 px-3 py-2 text-sm font-bold" :class="tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'">{{ t.label }}</router-link>
+          :key="t.key" :to="t.to" class="-mb-px flex min-h-[44px] shrink-0 items-center border-b-2 px-3 py-2 text-sm font-bold" :class="tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'">{{ t.label }}</router-link>
       </nav>
 
       <!-- ===== Boards ===== -->
       <section v-if="tab === 'boards'" class="mt-5">
         <div class="flex flex-wrap items-center gap-2">
-          <div class="relative min-w-[200px] max-w-xs flex-1"><Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" /><input v-model="search" class="input pl-9" placeholder="Search boards" aria-label="Search boards" /></div>
-          <select v-model="sort" class="input w-48" aria-label="Sort boards"><option value="updated">Sort: recently updated</option><option value="name">Sort: name</option><option value="overdue">Sort: most overdue</option></select>
-          <select v-model="filter" class="input w-44" aria-label="Filter boards"><option value="all">All boards</option><option value="starred">Starred</option><option value="overdue">With overdue tasks</option><option value="archived">Archived</option></select>
-          <button class="btn-ghost" :disabled="refreshing" title="Reload the task numbers" @click="refresh"><RefreshCw class="h-4 w-4" :class="refreshing && 'animate-spin'" />Refresh</button>
-          <button v-if="canManage" class="btn-primary ml-auto" @click="creating = true"><Plus class="h-4 w-4" />Create board</button>
+          <div class="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-xs sm:flex-1"><Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" /><input v-model="search" class="input pl-9" placeholder="Search boards" aria-label="Search boards" /></div>
+          <select v-model="sort" class="input min-w-0 flex-1 sm:w-48 sm:flex-none" aria-label="Sort boards"><option value="updated">Sort: recently updated</option><option value="name">Sort: name</option><option value="overdue">Sort: most overdue</option></select>
+          <select v-model="filter" class="input min-w-0 flex-1 sm:w-44 sm:flex-none" aria-label="Filter boards"><option value="all">All boards</option><option value="starred">Starred</option><option value="overdue">With overdue tasks</option><option value="archived">Archived</option></select>
+          <button v-busy="refreshing" class="btn-ghost" title="Reload the task numbers" @click="refresh"><RefreshCw class="h-4 w-4" />{{ refreshing ? 'Refreshing…' : 'Refresh' }}</button>
+          <button v-if="canManage" class="btn-primary w-full sm:ml-auto sm:w-auto" @click="creating = true"><Plus class="h-4 w-4" />Create board</button>
         </div>
 
         <template v-if="starred.length && filter === 'all' && !search">

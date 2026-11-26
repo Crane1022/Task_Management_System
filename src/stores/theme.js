@@ -44,7 +44,7 @@ export const useThemeStore = defineStore('theme', () => {
 
   async function persist() {
     try {
-      await saveAppearance(auth.user.uid, { global: globalLayer.value, pages: pages.value })
+      await ui.track(saveAppearance(auth.user.uid, { global: globalLayer.value, pages: pages.value }))
       return true
     } catch (e) {
       console.error(e)

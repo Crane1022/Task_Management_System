@@ -38,7 +38,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="grid min-h-screen place-items-center p-4">
+  <div class="grid min-h-[100dvh] place-items-center p-4">
     <form class="relative mt-8 w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-card" @submit.prevent="submit">
       <CatPeek variant="orange" />
       <div class="mb-5 flex items-center gap-2">
@@ -54,7 +54,7 @@ async function submit() {
       </div>
 
       <p v-if="error" class="mt-3 text-sm font-semibold text-red-600" role="alert">{{ error }}</p>
-      <button class="btn-primary mt-5 w-full" :disabled="busy">{{ busy ? 'Please wait…' : 'Sign in' }}</button>
+      <button v-busy="busy" class="btn-primary mt-5 w-full">{{ busy ? 'Please wait…' : 'Sign in' }}</button>
       <p class="mt-3 text-center text-xs text-muted">No account? Ask a Director to add you on the PMS Staff accounts page.</p>
     </form>
   </div>

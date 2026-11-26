@@ -19,5 +19,5 @@ defineProps({ text: { type: String, default: 'Loading…' }, small: { type: Bool
 .paw { opacity: 0; animation: paw-step 1.6s infinite; transform-origin: center; }
 @keyframes paw-step { 0%, 100% { opacity: 0; transform: scale(0.6) rotate(-8deg); } 25%, 60% { opacity: 1; transform: scale(1) rotate(0); } }
 @media (prefers-reduced-motion: reduce) { .paw { opacity: 1; animation: none; } }
-:global(.reduce-motion) .paw { opacity: 1; }
+.reduce-motion .paw { opacity: 1; }
 </style>

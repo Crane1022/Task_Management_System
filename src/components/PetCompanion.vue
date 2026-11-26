@@ -5,6 +5,7 @@ import { Settings2, EyeOff } from 'lucide-vue-next'
 import { useCompanionStore } from '@/stores/companion'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { useFestiveStore } from '@/stores/festive'
 import { fitSize, toPixels, toShare, dragTo, isDrag } from '@/companions/position'
 import { pickMessage, greetingFor, shouldSleep, SLEEP_AFTER_MS, PARTY_AFTER_MS, PARTY_MS, pickParty, pickPartyLine, partyAllowed } from '@/companions/behaviour'
 import { playVoice, playTune, stopTune } from '@/companions/sound'
@@ -14,12 +15,26 @@ import CompanionAvatar from './CompanionAvatar.vue'
 // and only the pet itself reacts to the mouse or touch (the layer around it lets everything through).
 const store = useCompanionStore()
 const auth = useAuthStore()
+// festive companion (25 Nov 2026): today's outfit and lines (festivals, Ramadan, morning, after 9 pm, rain, Monday/Friday)
+const festive = useFestiveStore()
+const firstName = () => (auth.profile?.displayName || auth.profile?.name || '').split(' ')[0]
+const FESTIVE_SAID = 'wb-pet-festive-said'
+let greeted = !!sessionStorage.getItem('wb-pet-hello') // the hello comes first; festive lines after it
+function sayFestive() {
+  const l = festive.line(firstName(), s.value.name)
+  if (!l || sessionStorage.getItem(FESTIVE_SAID) === l.key) return false
+  sessionStorage.setItem(FESTIVE_SAID, l.key)
+  say(l.text, 4200); effect('happy', 1800)
+  return true
+}
 const theme = useThemeStore()
 const router = useRouter()
 
 const s = computed(() => store.settings)
 const vw = ref(window.innerWidth)
-const vh = ref(window.innerHeight)
+// on a phone the pet stays above the bottom bar (25 Nov 2026)
+const usableHeight = () => window.innerHeight - (window.matchMedia('(max-width: 639px)').matches ? 76 : 0)
+const vh = ref(usableHeight())
 const size = computed(() => fitSize(s.value.size, vw.value, vh.value))
 const dragPos = ref(null)
 const pos = computed(() => dragPos.value ?? toPixels(s.value.position, size.value, vw.value, vh.value))
@@ -140,7 +155,7 @@ function leave() { hover.value = false; later(() => { if (!hover.value && !bubbl
 
 // ----- window size, activity, greeting -----
 let raf = 0
-const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { vw.value = window.innerWidth; vh.value = window.innerHeight }) }
+const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { vw.value = window.innerWidth; vh.value = usableHeight() }) }
 // moving the mouse or scrolling also counts as being here (checked at most once a second, so it stays cheap)
 let lastNudge = 0
 function nudge() {
@@ -163,8 +178,12 @@ onMounted(() => {
   // say hello once per browser session
   if (!sessionStorage.getItem('wb-pet-hello')) {
     sessionStorage.setItem('wb-pet-hello', '1')
-    later(() => { if (s.value.visible && s.value.behaviour.greeting) { say(greetingFor(store.animal, s.value.name, (auth.profile?.displayName || auth.profile?.name || '').split(' ')[0])); effect('happy', 1800) } }, 1500)
+    later(() => { greeted = true; if (s.value.visible && s.value.behaviour.greeting && !sayFestive()) { say(greetingFor(store.animal, s.value.name, firstName())); effect('happy', 1800) } }, 1500)
   }
+})
+// something new to say during the day (9 pm comes, it starts raining, a festival begins): once each, when the greeting is on
+watch(() => (festive.loaded ? festive.line('', '')?.key ?? '' : ''), (k) => {
+  if (k && greeted && s.value.visible && s.value.behaviour.greeting) later(sayFestive, 800)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
@@ -191,7 +210,7 @@ const below = computed(() => pos.value.top < 70)
       @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="cancel" @pointerenter="enter" @pointerleave="leave" @contextmenu.prevent
     >
       <CompanionAvatar
-        :animal-id="s.animalId" :colors="s.colors" :accessory="s.accessory" :custom-url="store.urls.custom"
+        :animal-id="s.animalId" :colors="s.colors" :accessory="s.accessory" :outfit="festive.outfit || s.outfit" :extra="festive.extra" :custom-url="store.urls.custom"
         :face-url="s.face.hasImage ? store.urls.face : ''" :face="s.face" :state="state" :look="look" :animated="animated"
       />
       <span v-if="confetti && animated" class="pet-confetti"><i v-for="n in 10" :key="n" :style="{ '--a': n * 36 + 'deg', '--d': 0.6 + (n % 3) * 0.15 + 's' }" /></span>

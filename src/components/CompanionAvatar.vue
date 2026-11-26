@@ -10,6 +10,8 @@ const props = defineProps({
   animalId: { type: String, default: DEFAULT_ANIMAL },
   colors: { type: Object, default: () => ({}) },
   accessory: { type: String, default: 'none' },
+  outfit: { type: String, default: '' }, // festive outfit, worn together with the accessory
+  extra: { type: String, default: '' },  // today's everyday extra: umbrella when it rains, nightcap after 9 pm, ...
   customUrl: { type: String, default: '' }, // the uploaded character (a picture)
   faceUrl: { type: String, default: '' },   // a photo shown on the face of a built-in animal
   face: { type: Object, default: () => ({ zoom: 1, x: 0, y: 0 }) },
@@ -32,7 +34,7 @@ watch(shownId, async (id) => {
 }, { immediate: true })
 
 const markup = computed(() => composePetSvg({
-  art: art.value, uid, accessory: props.accessory,
+  art: art.value, uid, accessory: props.accessory, outfit: props.outfit, extra: props.extra,
   photo: props.faceUrl ? { href: props.faceUrl, zoom: props.face.zoom, x: props.face.x, y: props.face.y } : null,
 }))
 const cssVars = computed(() => ({ ...colorsToStyle(effectiveColors(shownId.value, props.colors)), '--blink': blink }))

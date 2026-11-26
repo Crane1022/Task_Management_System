@@ -139,11 +139,17 @@ export async function moveTaskToBoard(task, dest, column, position, user) {
 
 // Deletes the task together with its activity and comments (they would otherwise stay behind unreachable)
 export async function deleteTask(taskId) {
-  const [acts, comments] = await Promise.all([
+  const [acts, comments, files] = await Promise.all([
     getDocs(query(activitiesRef, where('taskId', '==', taskId))).catch(() => ({ docs: [] })),
     getDocs(commentsRef(taskId)).catch(() => ({ docs: [] })),
+    getDocs(collection(db, 'tasks', taskId, 'files')).catch(() => ({ docs: [] })),
   ])
-  const refs = [...acts.docs, ...comments.docs].map((d) => d.ref)
+  // uploaded files: every piece, then the file record
+  const fileRefs = files.docs.flatMap((f) => [
+    ...Array.from({ length: f.data().chunks ?? 0 }, (_, i) => doc(db, 'tasks', taskId, 'files', f.id, 'chunks', String(i))),
+    f.ref,
+  ])
+  const refs = [...acts.docs.map((d) => d.ref), ...comments.docs.map((d) => d.ref), ...fileRefs]
   const first = writeBatch(db)
   first.delete(doc(db, 'tasks', taskId))
   refs.slice(0, 400).forEach((r) => first.delete(r))
@@ -189,7 +195,7 @@ export function addAttachment(taskId, attachment, user) {
   return changeTask(taskId, (task) => {
     const list = task.attachments ?? []
     if (list.length >= MAX_ATTACHMENTS) throw Object.assign(new Error(`A task can have up to ${MAX_ATTACHMENTS} attachments.`), { code: 'attachments/limit' })
-    if (list.some((a) => a.url === attachment.url)) throw Object.assign(new Error('That link is already attached.'), { code: 'attachments/duplicate' })
+    if (attachment.url && list.some((a) => a.url === attachment.url)) throw Object.assign(new Error('That link is already attached.'), { code: 'attachments/duplicate' })
     return { changes: { attachments: [...list, attachment] }, note: { action: 'attached', detail: attachment.name } }
   }, user)
 }

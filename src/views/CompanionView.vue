@@ -4,6 +4,8 @@ import { Upload, Trash2, RotateCcw, Check, Volume2, Info, TriangleAlert } from '
 import { useCompanionStore } from '@/stores/companion'
 import { useThemeStore } from '@/stores/theme'
 import { useUiStore } from '@/stores/ui'
+import { useFestiveStore } from '@/stores/festive'
+import { outfitName } from '@/companions/festive'
 import { PARTS, CUSTOM_ID, DEFAULT_ANIMAL, getAnimal } from '@/companions/registry'
 import {
   SIZE, NAME_MAX, effectiveColors, selectAnimal, toggleFavourite, resetColor, resetAppearance, resetFace, restoreOriginalAnimal,
@@ -15,6 +17,7 @@ import CompanionAvatar from '@/components/CompanionAvatar.vue'
 import AnimalLibrary from '@/components/AnimalLibrary.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import FestiveWardrobe from '@/components/FestiveWardrobe.vue'
 
 // "My companion": choose, customise and set up the pet. Everything is edited as a draft;
 // nothing changes for real until "Apply changes".
@@ -24,10 +27,20 @@ const ui = useUiStore()
 
 const TABS = [
   { id: 'choose', label: 'Choose companion' }, { id: 'appearance', label: 'Appearance' }, { id: 'upload', label: 'Upload' },
-  { id: 'size', label: 'Size and position' }, { id: 'behaviour', label: 'Behaviour' }, { id: 'reset', label: 'Reset' },
+  { id: 'size', label: 'Size and position' }, { id: 'behaviour', label: 'Behaviour' }, { id: 'festive', label: 'Festive wardrobe' }, { id: 'reset', label: 'Reset' },
 ]
 const SWATCHES = ['#ffffff', '#f3efe8', '#e8d3b5', '#c58f5a', '#8a5a3b', '#3a2a22', '#2b2b2b', '#a9b0b8', '#e8793a', '#ffd23f', '#6cbf5a', '#7aa8ff', '#b79df0', '#f08fa3', '#e63946']
 const clone = (o) => JSON.parse(JSON.stringify(o))
+// the live preview shows the pet as it is on screen today: today's festival outfit and everyday extra are added
+// automatically (they never change the choices saved here)
+const festive = useFestiveStore()
+const WHY = { rain: 'it is raining', storm: 'there is a thunderstorm', night: 'it is after 9 pm', morning: 'it is morning', friday: 'it is Friday', monday: 'it is Monday', iftar: 'buka puasa is soon', ramadan: 'it is Ramadan' }
+const todayNote = computed(() => {
+  const bits = []
+  if (festive.outfit) bits.push(`${outfitName(festive.outfit)} for ${festive.festival?.name ?? 'today'}`)
+  if (festive.extra) bits.push(`${outfitName(festive.extra).toLowerCase()} because ${WHY[festive.current.source] ?? WHY[festive.extra === 'umbrella' ? 'rain' : ''] ?? 'of today'}`)
+  return bits.length ? `Today it also has: ${bits.join(', and ')}. Added on its own; your choices stay as they are.` : ''
+})
 
 const tab = ref('choose')
 const draft = ref(clone(store.settings))
@@ -142,9 +155,9 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
       <p class="mt-1 text-sm text-muted">Pick an animal (or your own picture), make it yours, and drag it anywhere on the screen.</p>
 
       <div class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div>
-          <nav class="flex flex-wrap gap-1 border-b border-line" role="tablist" aria-label="Companion settings">
-            <button v-for="t in TABS" :key="t.id" role="tab" :aria-selected="tab === t.id" class="-mb-px border-b-2 px-3 py-2 text-sm font-bold" :class="tab === t.id ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'" @click="tab = t.id">{{ t.label }}</button>
+        <div class="min-w-0">
+          <nav class="no-scrollbar flex gap-1 overflow-x-auto border-b border-line sm:flex-wrap" role="tablist" aria-label="Companion settings">
+            <button v-for="t in TABS" :key="t.id" role="tab" :aria-selected="tab === t.id" class="-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-bold" :class="tab === t.id ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'" @click="tab = t.id">{{ t.label }}</button>
           </nav>
 
           <!-- A. choose -->
@@ -178,7 +191,7 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
                   <button v-if="draft.colors[activePart]" class="btn-ghost ml-auto py-1 text-xs" @click="clearColor(activePart)"><RotateCcw class="h-3.5 w-3.5" />Reset this colour</button>
                 </div>
               </div>
-              <button class="btn-ghost mt-3" @click="resetAppearanceNow"><RotateCcw class="h-4 w-4" />Reset appearance (colours, accessory, name)</button>
+              <button class="btn-ghost mt-3" @click="resetAppearanceNow"><RotateCcw class="h-4 w-4" />Reset appearance (colours, accessory, outfit, name)</button>
             </div>
           </section>
 
@@ -209,7 +222,7 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
               <p v-if="isCustom" class="text-sm text-muted">Choose one of the built-in animals first. Face photos are shaped to each animal's own head.</p>
               <template v-else>
                 <div class="flex flex-wrap items-center gap-4">
-                  <span class="block h-24 w-24 rounded-xl border border-line bg-bg p-1"><CompanionAvatar :animal-id="shownAnimalId" :colors="draft.colors" :accessory="draft.accessory" :face-url="draft.face.hasImage ? faceUrl : ''" :face="draft.face" /></span>
+                  <span class="block h-24 w-24 rounded-xl border border-line bg-bg p-1"><CompanionAvatar :animal-id="shownAnimalId" :colors="draft.colors" :accessory="draft.accessory" :outfit="draft.outfit" :face-url="draft.face.hasImage ? faceUrl : ''" :face="draft.face" /></span>
                   <div class="space-y-2">
                     <input :ref="(el) => (inputs.face = el)" type="file" :accept="ACCEPT" class="sr-only" @change="onFile($event, 'face')" />
                     <div class="flex flex-wrap gap-2">
@@ -237,7 +250,7 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
               <label class="label" for="c-size">Size: {{ draft.size }} px</label>
               <input id="c-size" v-model.number="draft.size" type="range" :min="SIZE.min" :max="SIZE.max" step="2" class="w-full accent-[var(--accent)]" />
               <div class="mt-3 flex items-end gap-4 rounded-xl bg-bg p-3">
-                <span class="block" :style="{ width: draft.size + 'px', height: draft.size + 'px' }"><CompanionAvatar :animal-id="shownAnimalId" :colors="draft.colors" :accessory="draft.accessory" :custom-url="customUrl" :face-url="draft.face.hasImage ? faceUrl : ''" :face="draft.face" :animated="animated" /></span>
+                <span class="block" :style="{ width: draft.size + 'px', height: draft.size + 'px' }"><CompanionAvatar :animal-id="shownAnimalId" :colors="draft.colors" :accessory="draft.accessory" :outfit="draft.outfit" :custom-url="customUrl" :face-url="draft.face.hasImage ? faceUrl : ''" :face="draft.face" :animated="animated" /></span>
                 <span class="text-xs text-muted">This is its real size on the screen.</span>
               </div>
             </div>
@@ -268,10 +281,13 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
             <p class="text-xs text-muted">If your device is set to reduce motion, or "Reduce motion" is on in Appearance, animations stay off whatever you choose here.</p>
           </section>
 
+          <!-- festive wardrobe (25 Nov 2026) -->
+          <FestiveWardrobe v-else-if="tab === 'festive'" v-model="draft.outfit" :accessory="draft.accessory" :outfit="draft.outfit" :animal-id="shownAnimalId" :colors="draft.colors" :face="draft.face" :face-url="draft.face.hasImage ? faceUrl : ''" :disabled="isCustom" />
+
           <!-- F. reset -->
           <section v-else class="card mt-4 space-y-3">
             <div v-for="r in [
-              { t: 'Reset appearance', d: 'Colours, accessory and name go back to the animal\'s own.', f: resetAppearanceNow, ok: true },
+              { t: 'Reset appearance', d: 'Colours, accessory, festive outfit and name go back to the animal\'s own.', f: resetAppearanceNow, ok: true },
               { t: 'Reset uploaded face', d: 'Removes the photo from the face and restores the original face.', f: removeFace, ok: draft.face.hasImage },
               { t: 'Reset position', d: 'Puts your companion back in its starting corner (applied at once).', f: resetPositionNow, ok: true },
               { t: 'Restore original animal', d: 'Back to the orange tabby cat with its own colours.', f: restoreAnimal, ok: true },
@@ -291,10 +307,11 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
           <div class="card">
             <h2 class="h">Live preview</h2>
             <div class="mx-auto h-44 w-44 rounded-2xl border border-line bg-bg p-3">
-              <CompanionAvatar :animal-id="shownAnimalId" :colors="colors" :accessory="draft.accessory" :custom-url="customUrl" :face-url="draft.face.hasImage && !previewingOther ? faceUrl : ''" :face="draft.face" :state="previewState" :animated="animated" />
+              <CompanionAvatar :animal-id="shownAnimalId" :colors="colors" :accessory="draft.accessory" :outfit="festive.outfit || draft.outfit" :extra="festive.extra" :custom-url="customUrl" :face-url="draft.face.hasImage && !previewingOther ? faceUrl : ''" :face="draft.face" :state="previewState" :animated="animated" />
             </div>
             <p class="mt-2 text-center text-sm font-extrabold">{{ draft.name || animal?.name || 'Your companion' }}</p>
             <p v-if="previewingOther" class="text-center text-xs text-muted">Previewing {{ getAnimal(browsing)?.name }}</p>
+            <p v-if="todayNote" class="mt-2 rounded-lg bg-bg px-2.5 py-1.5 text-center text-xs text-muted">{{ todayNote }}</p>
             <div class="mt-3">
               <label class="label" for="c-name">Rename your pet</label>
               <input id="c-name" v-model="draft.name" class="input" :maxlength="NAME_MAX" :placeholder="animal?.name || 'e.g. Mochi'" />
@@ -321,7 +338,7 @@ const testSound = () => playVoice(animal.value?.voice, draft.value.behaviour.vol
         <div class="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
           <button class="btn-ghost shadow-lg" :disabled="!dirty || saving" @click="cancel">Cancel</button>
           <button class="btn-ghost shadow-lg" :disabled="saving" @click="confirmAll = true">Reset to default</button>
-          <button class="btn-primary shadow-lg" :disabled="!dirty || saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
+          <button v-busy="saving" class="btn-primary shadow-lg" :disabled="!dirty && !saving" @click="apply">{{ saving ? 'Saving…' : 'Apply changes' }}</button>
         </div>
       </div>
     </div>

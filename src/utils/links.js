@@ -1,5 +1,5 @@
-// Task attachments are LINKS to files that live somewhere else (Google Drive, OneDrive, SharePoint, Dropbox or a company
-// file server). Nothing is uploaded to this app, and nothing is stored in Firebase Storage.
+// Link attachments: files that live somewhere else (Google Drive, OneDrive, SharePoint, Dropbox or a company file server).
+// Files uploaded straight to a task are handled in ./files.js (kept in Firestore; no Firebase Storage).
 const PROVIDERS = [
   [/(^|\.)(drive|docs)\.google\.com$/i, 'Google Drive'],
   [/(^|\.)onedrive\.live\.com$|(^|\.)1drv\.ms$|(^|\.)onedrive\.com$/i, 'OneDrive'],

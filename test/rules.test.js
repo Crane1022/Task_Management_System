@@ -94,5 +94,44 @@ test('firestore.rules', { skip }, async (t) => {
     await assertFails(updateDoc(doc(as('wsmember'), 'workspaces', 'W1'), { name: 'hacked' }))
   })
 
+  await t.test('uploaded files follow their task: readers open them, editors add them, pieces cannot be changed later', async () => {
+    const { serverTimestamp, writeBatch } = await import('firebase/firestore')
+    const meta = (uid, extra = {}) => ({ name: 'Quote.pdf', type: 'application/pdf', size: 1000, kind: 'pdf', chunks: 2, complete: false, addedBy: uid, createdAt: serverTimestamp(), ...extra })
+    const f = (db, task, id, ...rest) => doc(db, 'tasks', task, 'files', id, ...rest)
+    // a workspace member uploads; a viewer cannot
+    await assertSucceeds(setDoc(f(as('wsmember'), 'ws1', 'F1'), meta('wsmember')))
+    await assertFails(setDoc(f(as('wsviewer'), 'ws1', 'F2'), meta('wsviewer')))
+    await assertFails(setDoc(f(as('wsmember'), 'ws1', 'F3'), meta('wsadmin'))) // pretending to be someone else
+    await assertFails(setDoc(f(as('wsmember'), 'ws1', 'F4'), meta('wsmember', { chunks: 11 }))) // too big
+    await assertFails(setDoc(f(as('wsmember'), 'ws1', 'F5'), meta('wsmember', { complete: true })))
+    // pieces: only the uploader, only inside the count, only while uploading
+    await assertSucceeds(setDoc(f(as('wsmember'), 'ws1', 'F1', 'chunks', '0'), { data: 'aGVsbG8=' }))
+    await assertSucceeds(setDoc(f(as('wsmember'), 'ws1', 'F1', 'chunks', '1'), { data: 'aGVsbG8=' }))
+    await assertFails(setDoc(f(as('wsmember'), 'ws1', 'F1', 'chunks', '2'), { data: 'x' }))
+    await assertFails(setDoc(f(as('wsadmin'), 'ws1', 'F1', 'chunks', '0'), { data: 'x' }))
+    await assertFails(setDoc(f(as('wsmember'), 'ws1', 'F1', 'chunks', '0'), { data: 'x'.repeat(700001) }))
+    await assertFails(updateDoc(f(as('wsadmin'), 'ws1', 'F1'), { complete: true })) // only the uploader finishes it
+    await assertSucceeds(updateDoc(f(as('wsmember'), 'ws1', 'F1'), { complete: true }))
+    await assertFails(setDoc(f(as('wsmember'), 'ws1', 'F1', 'chunks', '0'), { data: 'changed' })) // finished: no more pieces
+    // reading: the viewer of the board can open it, someone outside the workspace cannot
+    await assertSucceeds(getDoc(f(as('wsviewer'), 'ws1', 'F1')))
+    await assertSucceeds(getDoc(f(as('wsviewer'), 'ws1', 'F1', 'chunks', '0')))
+    await assertFails(getDoc(f(as('outsider'), 'ws1', 'F1')))
+    await assertFails(getDoc(f(as('outsider'), 'ws1', 'F1', 'chunks', '0')))
+    // the original board: the same department may upload, another department may not
+    await assertSucceeds(setDoc(f(as('it1'), 'legacy1', 'L1'), meta('it1', { chunks: 1 })))
+    await assertFails(setDoc(f(as('hr1'), 'legacy1', 'L2'), meta('hr1'))) // hr1 is an assignee here, but from another department
+    // removing: an editor of the task may delete; a viewer may not
+    await assertFails(deleteDoc(f(as('wsviewer'), 'ws1', 'F1', 'chunks', '0')))
+    await assertSucceeds(deleteDoc(f(as('wsadmin'), 'ws1', 'F1', 'chunks', '0')))
+    await assertFails(deleteDoc(f(as('wsviewer'), 'ws1', 'F1')))
+    // when the task is deleted, its files go in the same batch
+    const b = writeBatch(as('wsadmin'))
+    b.delete(doc(as('wsadmin'), 'tasks', 'ws1'))
+    b.delete(f(as('wsadmin'), 'ws1', 'F1', 'chunks', '1'))
+    b.delete(f(as('wsadmin'), 'ws1', 'F1'))
+    await assertSucceeds(b.commit())
+  })
+
   await env.cleanup()
 })

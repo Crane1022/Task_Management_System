@@ -104,7 +104,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function run(fn, msg) {
-    try { return await fn() } catch (e) { console.error(e); ui.toast(`${msg}: ${e.code ?? e.message}`, 'error') }
+    try { return await ui.track(fn) } catch (e) { console.error(e); ui.toast(`${msg}: ${e.code ?? e.message}`, 'error') }
   }
 
   const addWorkspace = (data) => run(async () => {
