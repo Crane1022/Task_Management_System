@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
-import { Paperclip, MessageSquare, CheckSquare, CalendarDays, Check, ChevronRight } from 'lucide-vue-next'
+import { Paperclip, MessageSquare, CheckSquare, CalendarDays, Check, ChevronRight, Lock } from 'lucide-vue-next'
+import { openBlockers } from '@/utils/deps'
 import { useBoardStore } from '@/stores/board'
 import { priorityOf, deptName } from '@/utils/constants'
 import UserAvatar from './UserAvatar.vue'
@@ -19,6 +20,8 @@ const initials = (u) => u.name.split(' ').map((w) => w[0]).slice(0, 2).join('').
 // 'saving' while a dragged card is being written to Firestore (and the PMS for a ticket), then 'saved' for a moment
 const board = useBoardStore()
 const sync = computed(() => board.syncState?.[props.task.id])
+// waits on tasks that are not finished yet (26 Nov 2026)
+const waiting = computed(() => (props.task.blockedBy?.length && !props.task.completedAt ? openBlockers(props.task, board.tasks).length : 0))
 const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(0), 0) % 360} 55% 45%)`
 </script>
 
@@ -36,6 +39,7 @@ const labelColor = (text) => `hsl(${[...text].reduce((a, c) => a + c.charCodeAt(
       <span class="rounded-md px-1.5 py-0.5" :class="priority.cls">{{ priority.name }}</span>
       <span class="rounded-md bg-bg px-1.5 py-0.5 text-muted">{{ deptName(task.departmentId) }}</span>
       <span v-if="task.category" class="rounded-md bg-bg px-1.5 py-0.5 text-muted">{{ task.category }}</span>
+      <span v-if="waiting" class="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" :title="`Waiting on ${waiting} unfinished task${waiting === 1 ? '' : 's'}`"><Lock class="h-3 w-3" />Waiting on {{ waiting }}</span>
     </div>
 
     <div v-if="subs.length" class="mt-2.5">

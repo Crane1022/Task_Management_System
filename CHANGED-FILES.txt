@@ -1,0 +1,9 @@
+Changed files (26 Nov 2026, tour + name search). Copy them into the project at the same paths.
+No rules change this time.
+
+src/components/TourDialog.vue
+src/components/SearchPanel.vue
+src/utils/search.js
+src/stores/board.js
+test/improvements.test.js
+README.md

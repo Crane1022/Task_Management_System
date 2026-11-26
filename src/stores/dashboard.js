@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { friendlySentence } from '@/utils/errors'
+import { friendly } from '@/utils/errors'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
@@ -28,14 +30,14 @@ export const useDashboardStore = defineStore('dashboards', () => {
       if (seeding) return
       seeding = true
       try { await createDashboard(auth.user.uid, 'My dashboard', DEFAULT_WIDGETS()) }
-      catch (e) { error.value = e.message; loading.value = false }
+      catch (e) { error.value = friendlySentence(e); loading.value = false }
       finally { seeding = false }
-    }, (e) => { error.value = e.message; loading.value = false })
+    }, (e) => { error.value = friendlySentence(e); loading.value = false })
   }
   function stop() { unsub?.(); unsub = null }
 
   async function run(fn, msg) {
-    try { return await ui.track(fn) } catch (e) { console.error(e); ui.toast(`${msg}: ${e.code ?? e.message}`, 'error') }
+    try { return await ui.track(fn) } catch (e) { console.error(e); ui.toast(`${msg}: ${friendly(e)}`, 'error') }
   }
   const select = (id) => (activeId.value = id)
   const save = (changes) => run(() => saveDashboard(active.value.id, changes), 'Could not save dashboard')

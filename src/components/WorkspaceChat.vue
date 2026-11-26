@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Send, Trash2, Lock, Smile, X, Plus } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -88,10 +89,10 @@ async function saveSticker() {
   if (mine.value.some((s) => s.url === url)) { ui.toast('You already saved that sticker'); return }
   savingSticker.value = true
   try { await addSticker(auth.user.uid, url); newUrl.value = ''; ui.toast('Sticker saved') }
-  catch (e) { ui.toast(`Could not save the sticker: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not save the sticker: ${friendly(e)}`, 'error') }
   finally { savingSticker.value = false }
 }
-const removeSticker = (s) => deleteSticker(auth.user.uid, s.id).catch((e) => ui.toast(`Could not remove it: ${e.code ?? e.message}`, 'error'))
+const removeSticker = (s) => deleteSticker(auth.user.uid, s.id).catch((e) => ui.toast(`Could not remove it: ${friendly(e)}`, 'error'))
 
 // ----- sending -----
 async function deliver(message) {
@@ -101,7 +102,7 @@ async function deliver(message) {
     await sendChat(props.workspaceId, props.chat?.id ?? '', message, auth.profile)
     if (message.mentions?.length && props.workspace) notify.chatMention(props.workspace, message.text, message.mentions) // best effort
     return true
-  } catch (e) { ui.toast(`Could not send: ${e.code ?? e.message}`, 'error') }
+  } catch (e) { ui.toast(`Could not send: ${friendly(e)}`, 'error') }
   finally { busy.value = false }
 }
 async function send() {
@@ -111,7 +112,7 @@ async function send() {
   if (ok) { text.value = ''; picked.value = []; panel.value = '' }
 }
 async function sendSticker(sticker) { if (await deliver({ text: '', sticker })) panel.value = '' }
-const remove = (m) => deleteMessage(props.workspaceId, props.chat?.id ?? '', m.id).catch((e) => ui.toast(`Could not delete: ${e.code ?? e.message}`, 'error'))
+const remove = (m) => deleteMessage(props.workspaceId, props.chat?.id ?? '', m.id).catch((e) => ui.toast(`Could not delete: ${friendly(e)}`, 'error'))
 const broken = ref(new Set())
 </script>
 

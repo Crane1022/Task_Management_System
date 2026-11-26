@@ -94,6 +94,10 @@ test('firestore.rules', { skip }, async (t) => {
     await assertFails(updateDoc(doc(as('wsmember'), 'workspaces', 'W1'), { name: 'hacked' }))
   })
 
+  await t.test('dependencies: a task can wait on up to 20 tasks', async () => {
+    await assertSucceeds(updateDoc(doc(as('it1'), 'tasks', 'legacy1'), { blockedBy: ['x1'] }))
+    await assertFails(updateDoc(doc(as('it1'), 'tasks', 'legacy1'), { blockedBy: Array.from({ length: 21 }, (_, i) => 'x' + i) }))
+  })
   await t.test('uploaded files follow their task: readers open them, editors add them, pieces cannot be changed later', async () => {
     const { serverTimestamp, writeBatch } = await import('firebase/firestore')
     const meta = (uid, extra = {}) => ({ name: 'Quote.pdf', type: 'application/pdf', size: 1000, kind: 'pdf', chunks: 2, complete: false, addedBy: uid, createdAt: serverTimestamp(), ...extra })

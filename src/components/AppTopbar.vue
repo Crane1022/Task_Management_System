@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Sun, Moon, Search, Plus, UserRound, Palette, LogOut, PawPrint, Leaf, X } from 'lucide-vue-next'
+import { Sun, Moon, Search, Plus, UserRound, Palette, LogOut, PawPrint, Leaf, X, Compass } from 'lucide-vue-next'
 import UserAvatar from '@/components/UserAvatar.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
+import SearchPanel from '@/components/SearchPanel.vue'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -29,7 +30,7 @@ async function signOut() {
 // On a phone (25 Nov 2026) the bar shows the page's name instead of the search box. The search button opens the box
 // over the bar; it stays open while there is something typed in it.
 const TITLES = {
-  dashboard: 'Dashboard', board: 'Kanban board', 'board-by-id': 'Kanban board', 'my-tasks': 'My tasks', list: 'List',
+  dashboard: 'Dashboard', board: 'Kanban board', 'board-by-id': 'Kanban board', 'my-tasks': 'My tasks', list: 'List', calendar: 'Calendar',
   staff: 'Staff', festive: 'Festive events', profile: 'Profile', companion: 'My companion', appearance: 'Appearance',
 }
 const title = computed(() => {
@@ -41,7 +42,10 @@ const searchOpen = ref(false)
 const searchBox = ref(null)
 async function openSearch() { searchOpen.value = true; await nextTick(); searchBox.value?.focus() }
 function closeSearch() { board.filters.search = ''; searchOpen.value = false }
-watch(() => route.fullPath, () => { if (!board.filters.search) searchOpen.value = false })
+watch(() => route.fullPath, () => { if (!board.filters.search) searchOpen.value = false; resultsOpen.value = false })
+// the results list under the box (tasks, comments, files) shows while the box has focus and something is typed
+const resultsOpen = ref(false)
+function picked() { resultsOpen.value = false; board.filters.search = ''; searchOpen.value = false }
 </script>
 
 <template>
@@ -56,7 +60,8 @@ watch(() => route.fullPath, () => { if (!board.filters.search) searchOpen.value 
     <template v-if="route.meta.tasks">
       <div class="relative w-full max-w-xs" :class="searchOpen ? 'absolute inset-x-2 top-1/2 z-10 max-w-none -translate-y-1/2 sm:static sm:translate-y-0' : 'hidden sm:block'">
         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        <input ref="searchBox" v-model="board.filters.search" type="search" class="input py-1.5 pl-9 pr-10 sm:pr-3" placeholder="Search tasks" aria-label="Search tasks by title or description" @keydown.esc="closeSearch" />
+        <input ref="searchBox" v-model="board.filters.search" type="search" class="input py-1.5 pl-9 pr-10 sm:pr-3" placeholder="Search tasks, comments, files" aria-label="Search tasks, comments and attached files" @focus="resultsOpen = true" @input="resultsOpen = true" @blur="resultsOpen = false" @keydown.esc="resultsOpen ? (resultsOpen = false) : closeSearch()" />
+        <SearchPanel v-if="resultsOpen && board.filters.search.trim()" :query="board.filters.search" @picked="picked" />
         <button v-if="searchOpen" class="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center text-muted sm:hidden" aria-label="Close search" @click="closeSearch"><X class="h-5 w-5" /></button>
       </div>
       <button v-if="board.canEdit" class="btn-primary hidden shrink-0 sm:inline-flex" @click="ui.requestNewTask()"><Plus class="h-4 w-4" />New task</button>
@@ -81,6 +86,8 @@ watch(() => route.fullPath, () => { if (!board.filters.search) searchOpen.value 
           <router-link to="/settings/profile" class="flex min-h-[44px] items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-bg sm:min-h-0 sm:py-2" @click="menu = false"><UserRound class="h-4 w-4" />Profile and settings</router-link>
           <router-link to="/settings/appearance" class="flex min-h-[44px] items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-bg sm:min-h-0 sm:py-2" @click="menu = false"><Palette class="h-4 w-4" />Appearance and theme</router-link>
           <router-link to="/settings/companion" class="flex min-h-[44px] items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-bg sm:min-h-0 sm:py-2" @click="menu = false"><PawPrint class="h-4 w-4" />My companion</router-link>
+          <!-- 26 Nov 2026: the welcome tour again, any time -->
+          <button type="button" role="menuitem" class="flex min-h-[44px] w-full items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-bg sm:min-h-0 sm:py-2" @click="menu = false; ui.tourOpen = true"><Compass class="h-4 w-4" />Show the guide tour</button>
           <!-- phone: dark mode lives here, so the bar has room for the page name -->
           <button class="flex min-h-[44px] w-full items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-bg sm:hidden" @click="theme.toggleDark(); menu = false"><component :is="ui.dark ? Sun : Moon" class="h-4 w-4" />{{ ui.dark ? 'Light mode' : 'Dark mode' }}</button>
           <button v-busy="signingOut" class="btn flex min-h-[44px] w-full justify-start gap-2 rounded-lg px-2 text-sm font-semibold text-red-600 hover:bg-bg sm:min-h-0 sm:py-2" @click="signOut"><LogOut class="h-4 w-4" />{{ signingOut ? 'Signing out…' : 'Sign out' }}</button>

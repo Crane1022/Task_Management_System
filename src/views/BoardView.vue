@@ -42,6 +42,12 @@ watch([() => board.tasks, () => board.loading], () => {
   else ui.toast('That task is not on this board any more, or you can no longer open it', 'error')
   window.history.replaceState(window.history.state, '', route.path) // drop ?task= from the address bar without reloading the page
 })
+// the no-access screen names who can let the person in, when the workspace's admins are known (26 Nov 2026)
+const deniedAskWho = computed(() => {
+  const w = board.workspace ?? wsStore.workspaceById(board.boardDoc?.workspaceId)
+  const admins = Object.entries(w?.members ?? {}).filter(([, r]) => r === 'admin').map(([id]) => board.users[id]?.displayName || board.users[id]?.name).filter(Boolean)
+  return admins.length ? admins.slice(0, 2).join(' or ') : 'an admin of its workspace'
+})
 const doneChange = ref(null) // { column, changes } waiting for confirmation
 const showArchived = ref(false)
 
@@ -157,9 +163,13 @@ const deleteTargets = computed(() => board.activeColumns.filter((c) => c.id !== 
     <div v-else-if="board.denied" class="grid flex-1 place-items-center p-6 text-center">
       <div class="max-w-sm">
         <ShieldOff class="mx-auto h-8 w-8 text-muted" />
-        <h2 class="mt-2 text-base font-extrabold">You do not have access to this board</h2>
-        <p class="mt-1 text-sm text-muted">Ask an admin of its workspace to add you as a member.</p>
-        <button class="btn-primary mt-4" @click="router.push('/board')">Go to the Main board</button>
+        <h2 class="mt-2 text-base font-extrabold">You don’t have access to this board</h2>
+        <p class="mt-1 text-sm text-muted">This board belongs to a workspace you are not a member of. Ask {{ deniedAskWho }} to add you, and it will open straight away.</p>
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
+          <button class="btn-primary" @click="router.push('/my-tasks')">Go to My tasks</button>
+          <button class="btn-ghost" @click="router.push('/board')">Main board</button>
+        </div>
+        <details class="mt-4 text-left text-xs text-muted"><summary class="cursor-pointer font-bold">Details for IT</summary><p class="mt-1 rounded-lg bg-bg p-2 font-mono">permission-denied · board {{ board.boardId }}</p></details>
       </div>
     </div>
 

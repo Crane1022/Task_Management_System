@@ -14,7 +14,7 @@ const route = useRoute()
 const items = [
   { to: '/', label: 'Home', icon: LayoutDashboard, names: ['dashboard'] },
   { to: '/board', label: 'Board', icon: Columns3, names: ['board', 'board-by-id'] },
-  { to: '/list', label: 'List', icon: ListChecks, names: ['list'] },
+  { to: '/list', label: 'List', icon: ListChecks, names: ['list', 'calendar'] },
   { to: '/my-tasks', label: 'My tasks', icon: UserCheck, names: ['my-tasks'] },
 ]
 const onMain = computed(() => items.some((i) => i.names.includes(route.name)))

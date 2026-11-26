@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { LayoutDashboard, Columns3, ListChecks, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound, PawPrint, FolderPlus, Gift } from 'lucide-vue-next'
+import { LayoutDashboard, Columns3, ListChecks, CalendarDays, UserCheck, PanelLeftClose, PanelLeftOpen, LogOut, Leaf, Palette, Users, ChevronDown, ChevronRight, Plus, UserRound, PawPrint, FolderPlus, Gift } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -38,6 +38,7 @@ const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/board', label: 'Kanban Board', icon: Columns3 },
   { to: '/list', label: 'List', icon: ListChecks },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/my-tasks', label: 'My Tasks', icon: UserCheck },
 ]
 const accountLinks = [

@@ -10,4 +10,6 @@ export { getMessaging, getToken, deleteToken, isSupported as isMessagingSupporte
 export {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, writeBatch,
   onSnapshot, query, where, orderBy, limit, serverTimestamp, Timestamp, arrayUnion, arrayRemove, deleteField, runTransaction,
+  // 26 Nov 2026: keep a copy of the data on this device, so the app opens and works without internet
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'

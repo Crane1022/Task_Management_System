@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch } from 'vue'
 import { Paperclip, Link2 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -37,7 +38,7 @@ async function add(l) {
       addedBy: auth.user.uid, addedByName: auth.profile.displayName || auth.profile.name, addedAt: Date.now(),
     }, auth.profile)
     ui.toast('Added to attachments')
-  } catch (e) { ui.toast(['attachments/duplicate', 'attachments/limit'].includes(e.code) ? e.message : `Could not add the attachment: ${e.code ?? e.message}`, 'error') }
+  } catch (e) { ui.toast(['attachments/duplicate', 'attachments/limit'].includes(e.code) ? e.message : `Could not add the attachment: ${friendly(e)}`, 'error') }
   finally { busy.value = '' }
 }
 </script>

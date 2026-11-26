@@ -208,6 +208,11 @@ export function removeAttachment(taskId, attachmentId, user) {
   }, user)
 }
 
+// ---------- dependencies (26 Nov 2026): `blockedBy` = the IDs of the tasks that must be finished first ----------
+export function setBlockedBy(taskId, ids, user, note) {
+  return changeTask(taskId, () => ({ changes: { blockedBy: ids }, note }), user)
+}
+
 // ---------- comments: tasks/{taskId}/comments/{id}, readable only by people who can read the task ----------
 export function subscribeComments(taskId, onData, onError) {
   return onSnapshot(commentsRef(taskId), (snap) => {
@@ -219,6 +224,8 @@ export const addComment = (taskId, text, user, mentions = []) =>
   addDoc(commentsRef(taskId), {
     text: text.trim(), userId: user.id, userName: displayOf(user), createdAt: serverTimestamp(), ...(mentions.length ? { mentions } : {}),
   })
+// all comments of one task, read once (search looks through them)
+export const fetchComments = async (taskId) => rows(await getDocs(commentsRef(taskId)))
 export const editComment = (taskId, commentId, text) =>
   updateDoc(doc(db, 'tasks', taskId, 'comments', commentId), { text: text.trim(), editedAt: serverTimestamp() })
 export const deleteComment = (taskId, commentId) => deleteDoc(doc(db, 'tasks', taskId, 'comments', commentId))

@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { friendlySentence } from '@/utils/errors'
+import { friendly } from '@/utils/errors'
 import { ref, reactive, computed, watch } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
@@ -6,7 +8,10 @@ import { useCompanionStore } from './companion'
 import { useWorkspaceStore } from './workspace'
 import { useNotificationStore } from './notifications'
 import { subscribeColumns, fetchColumns, createColumn, renameColumn, deleteColumn, seedDefaultColumns, updateColumn, reorderColumns } from '@/services/columnService'
-import { subscribeBoardTasks, createTask, updateTask, moveTask, moveTaskToBoard, deleteTask, moveAllTasks } from '@/services/taskService'
+import { subscribeBoardTasks, createTask, updateTask, moveTask, moveTaskToBoard, deleteTask, moveAllTasks, setBlockedBy, fetchComments } from '@/services/taskService'
+import { canFinish, waitingMessage, MAX_BLOCKERS, makesLoop } from '@/utils/deps'
+import { taskHit, fileHits, commentHit, assigneeHit, MIN_COMMENT_SEARCH } from '@/utils/search'
+import { fromInput, toInput } from '@/utils/dates'
 import { subscribeUsers } from '@/services/userService'
 import { subscribeBoardDoc, subscribeWorkspace } from '@/services/workspaceService'
 import { pushToPms, raiseInPms, syncIssue, clearDeletedTickets, deleteInPms } from '@/services/pmsIssues'
@@ -61,7 +66,10 @@ export const useBoardStore = defineStore('board', () => {
 
   const aggregateWanted = ref(false)
   const aggregate = computed(() => aggregateWanted.value && boardId.value === MAIN_BOARD)
-  const tasks = computed(() => (aggregate.value ? mergeTasks(ownTasks.value, ...Object.values(extraTasks.value)) : ownTasks.value))
+  // tasks being deleted wait a few seconds (Undo); meanwhile they are hidden here (26 Nov 2026)
+  const hidden = ref([])
+  const allTasks = computed(() => (aggregate.value ? mergeTasks(ownTasks.value, ...Object.values(extraTasks.value)) : ownTasks.value))
+  const tasks = computed(() => (hidden.value.length ? allTasks.value.filter((t) => !hidden.value.includes(t.id)) : allTasks.value))
 
   // ----- who may do what here -----
   const legacy = computed(() => resolved.value && !boardDoc.value)
@@ -92,7 +100,7 @@ export const useBoardStore = defineStore('board', () => {
   // ----- loading -----
   const fail = (e) => {
     denied.value = e.code === 'permission-denied'
-    error.value = e.message
+    error.value = friendlySentence(e)
     loading.value = false
   }
 
@@ -185,10 +193,8 @@ export const useBoardStore = defineStore('board', () => {
 
   function matches(t) {
     const f = filters
-    if (f.search) {
-      const s = f.search.toLowerCase()
-      if (!`${t.title} ${t.description ?? ''}`.toLowerCase().includes(s)) return false
-    }
+    // the search box also finds tasks by who they are assigned to, the names of their attached files and their comments (26 Nov 2026)
+    if (f.search && !taskHit(t, f.search) && !assigneeHit(t, users.value, f.search) && !fileHits(t, f.search).length && !(commentIndex.value[t.id] ?? []).some((c) => commentHit(c, f.search))) return false
     if (f.assignee) {
       const id = f.assignee === 'me' ? auth.user.uid : f.assignee
       if (!t.assignedTo?.includes(id)) return false
@@ -210,6 +216,27 @@ export const useBoardStore = defineStore('board', () => {
     }
     return true
   }
+  // ----- comments for search: read once per task (at most 80 tasks, the most recently changed), kept for 3 minutes -----
+  const commentIndex = ref({}) // taskId -> comments
+  const commentsLoading = ref(false)
+  const commentReadAt = new Map()
+  async function loadCommentsForSearch() {
+    if ((filters.search ?? '').trim().length < MIN_COMMENT_SEARCH) return
+    const now = Date.now()
+    const want = [...tasks.value]
+      .sort((a, b) => (b.updatedAt?.toMillis?.() ?? 0) - (a.updatedAt?.toMillis?.() ?? 0))
+      .slice(0, 80)
+      .filter((t) => now - (commentReadAt.get(t.id) ?? 0) > 180000)
+    if (!want.length) return
+    commentsLoading.value = true
+    want.forEach((t) => commentReadAt.set(t.id, now))
+    const got = await Promise.all(want.map((t) => fetchComments(t.id).then((c) => [t.id, c]).catch(() => [t.id, []])))
+    commentIndex.value = { ...commentIndex.value, ...Object.fromEntries(got) }
+    commentsLoading.value = false
+  }
+  let searchTimer = null
+  watch(() => filters.search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadCommentsForSearch, 350) })
+
   const activeColumns = computed(() => columns.value.filter((c) => !c.archived))
   const archivedColumns = computed(() => columns.value.filter((c) => c.archived))
   const filtered = computed(() => tasks.value.filter(matches))
@@ -262,7 +289,7 @@ export const useBoardStore = defineStore('board', () => {
   async function run(fn, errorMessage, onFail) {
     try { return await ui.track(fn) } catch (e) {
       console.error(e)
-      ui.toast(`${errorMessage}: ${e.code ?? e.message}`, 'error')
+      ui.toast(`${errorMessage}: ${friendly(e)}`, 'error')
       onFail?.()
     }
   }
@@ -344,9 +371,11 @@ export const useBoardStore = defineStore('board', () => {
     return true
   }, 'Could not create task')
 
-  const saveTask = (task, changes, notes) => run(async () => {
+  // `quiet`: no "Task saved" message (changing many tasks at once shows one message at the end)
+  const saveTask = (task, changes, notes, { quiet = false } = {}) => run(async () => {
     const column = columnsFor(task.boardId).find((c) => c.id === changes.columnId)
     const moving = !!column && column.id !== task.columnId
+    if (moving && column.isDone && !canFinish(task, tasks.value)) { ui.toast(waitingMessage(task, tasks.value), 'error'); return false }
     // a ticket's card: status, title and description go to the PMS first (it may refuse); other fields are TMS only
     if (isIssueTask(task) && (moving || 'title' in changes || 'description' in changes)) {
       await pushToPms(task, {
@@ -366,7 +395,8 @@ export const useBoardStore = defineStore('board', () => {
     }
     if (Object.keys(changes).length) await updateTask(task.id, changes, notes, auth.profile)
     if (changes.assignedTo) notif.taskAssigned(task, changes.assignedTo.filter((id) => !(task.assignedTo ?? []).includes(id)))
-    ui.toast('Task saved')
+    if (!quiet) ui.toast('Task saved')
+    return true
   }, 'Could not save task')
 
   // Moves the task (same record, same ID) to a column of another workspace board
@@ -376,6 +406,7 @@ export const useBoardStore = defineStore('board', () => {
     const cols = await loadColumnsFor(dest.boardId)
     const column = cols.find((c) => c.id === columnId) ?? columnByStatus(cols, task.status) ?? cols.find((c) => !c.archived)
     if (!column) { ui.toast('That board has no columns yet', 'error'); return false }
+    if (column.isDone && !task.completedAt && !canFinish(task, tasks.value)) { ui.toast(waitingMessage(task, tasks.value), 'error'); return false }
     const known = tasks.value.some((t) => t.columnId === column.id)
     if (isLeadCard(task)) { // a PMS listing's card stays on the Owner Leads board; a column change there goes to the PMS
       if (dest.boardId !== task.boardId) { ui.toast(`${task.pmsLink.id}'s card stays on the Owner Leads board (it is a PMS listing)`, 'error'); return false }
@@ -410,10 +441,83 @@ export const useBoardStore = defineStore('board', () => {
       ui.toast(`Ticket ${id} deleted, here and in the PMS`)
       return true
     }
-    await deleteTask(task.id)
-    ui.toast('Task deleted')
+    hideThenDelete([task], `“${task.title}” deleted`)
     return true
   }, 'Could not delete task')
+
+  // Undo (26 Nov 2026): the tasks disappear at once, and are really deleted after 6 seconds unless Undo is pressed.
+  // Tickets and PMS listings are not included: their delete goes through the PMS straight away.
+  function hideThenDelete(list, message) {
+    const ids = list.map((t) => t.id)
+    hidden.value = [...hidden.value, ...ids]
+    const unhide = () => { hidden.value = hidden.value.filter((id) => !ids.includes(id)) }
+    ui.undoable({
+      message,
+      undo: unhide,
+      commit: async () => {
+        try { for (const id of ids) await ui.track(() => deleteTask(id)) } finally { unhide() }
+      },
+    })
+  }
+
+  // ----- many tasks at once (List page, 26 Nov 2026) -----
+  const plainTask = (t) => !isIssueTask(t) && !isLeadCard(t)
+  const canChange = (t) => ['admin', 'member'].includes(roleOfBoard(t.boardId))
+  const canRemove = (t) => roleOfBoard(t.boardId) === 'admin' || (roleOfBoard(t.boardId) === 'member' && t.createdBy === auth.user.uid)
+  // kind: 'column' (value = a column NAME, matched on each task's own board), 'assign' (a user ID), 'priority', 'due' ("YYYY-MM-DD" or '')
+  async function bulkChange(list, kind, value) {
+    let done = 0
+    const skipped = []
+    for (const t of list) {
+      if (!canChange(t)) { skipped.push(t); continue }
+      let changes, notes
+      if (kind === 'column') {
+        const col = columnsFor(t.boardId).find((c) => !c.archived && c.name.toUpperCase() === String(value).toUpperCase())
+        if (!col || col.id === t.columnId) { if (!col) skipped.push(t); continue }
+        changes = { columnId: col.id }; notes = []
+      } else if (kind === 'assign') {
+        if ((t.assignedTo ?? []).includes(value)) continue
+        changes = { assignedTo: [...(t.assignedTo ?? []), value] }; notes = ['changed assigned to']
+      } else if (kind === 'priority') {
+        if (t.priority === value) continue
+        changes = { priority: value }; notes = ['changed priority']
+      } else if (kind === 'due') {
+        if (toInput(t.dueDate) === value) continue
+        changes = { dueDate: fromInput(value) }; notes = ['changed due date']
+      } else continue
+      if (await saveTask(t, changes, notes, { quiet: true })) done++
+      else skipped.push(t)
+    }
+    if (done) ui.toast(`${done} task${done === 1 ? '' : 's'} changed`)
+    if (skipped.length) ui.toast(`${skipped.length} task${skipped.length === 1 ? ' was' : 's were'} not changed (no permission, a missing column, or still waiting on another task)`, 'error')
+    return done
+  }
+  function bulkRemove(list) {
+    const ok = list.filter((t) => canRemove(t) && plainTask(t))
+    const left = list.length - ok.length
+    if (ok.length) hideThenDelete(ok, ok.length === 1 ? `“${ok[0].title}” deleted` : `${ok.length} tasks deleted`)
+    if (left) ui.toast(`${left} task${left === 1 ? ' was' : 's were'} not deleted: you can only delete your own tasks, and PMS tickets are deleted from their task window`, 'error')
+    return ok.length
+  }
+
+  // a new deadline from the Calendar page (a card dropped on another day); key = "YYYY-MM-DD"
+  const setDue = (task, key) => (toInput(task.dueDate) === key ? Promise.resolve(false) : saveTask(task, { dueDate: fromInput(key) }, ['changed due date'], { quiet: true }).then((ok) => { if (ok) ui.toast(`Deadline moved to ${fromInput(key).toDate().toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}`); return ok }))
+
+  // ----- dependencies (26 Nov 2026) -----
+  const addBlocker = (task, blockerId) => run(async () => {
+    const list = task.blockedBy ?? []
+    if (list.includes(blockerId)) return true
+    if (list.length >= MAX_BLOCKERS) { ui.toast(`A task can wait on up to ${MAX_BLOCKERS} tasks`, 'error'); return false }
+    if (makesLoop(task.id, blockerId, tasks.value)) { ui.toast('That would make the two tasks wait on each other forever', 'error'); return false }
+    const other = tasks.value.find((t) => t.id === blockerId)
+    await setBlockedBy(task.id, [...list, blockerId], auth.profile, { action: 'now waits on', detail: other?.title ?? '' })
+    return true
+  }, 'Could not add it')
+  const removeBlocker = (task, blockerId) => run(async () => {
+    const other = tasks.value.find((t) => t.id === blockerId)
+    await setBlockedBy(task.id, (task.blockedBy ?? []).filter((id) => id !== blockerId), auth.profile, { action: 'no longer waits on', detail: other?.title ?? 'a task' })
+    return true
+  }, 'Could not remove it')
 
   // Called after a drop. `ids` is the final card order of the target column as shown on screen.
   // Cards being saved after a drag: { [taskId]: 'saving' | 'saved' }. TaskCard shows "Syncing" then a tick.
@@ -446,6 +550,7 @@ export const useBoardStore = defineStore('board', () => {
     const next = tasks.value.find((t) => t.id === ids[i + 1])
     const position = positionBetween(prev?.position, next?.position)
     if (task.columnId === column.id && task.position === position) return
+    if (column.isDone && task.columnId !== column.id && !canFinish(task, tasks.value)) { ui.toast(waitingMessage(task, tasks.value), 'error'); resetTasks(); return }
     // a ticket's card changing column: the PMS first (it refuses, e.g., a locked Completed ticket; the card then goes back)
     if (task.columnId !== column.id) await pushToPms(task, { column, columns: columnsFor(task.boardId) }, auth.profile)
     if (task.columnId !== column.id && isLeadCard(task)) await pushLeadToPms(task, { column }, auth.profile)
@@ -512,5 +617,6 @@ export const useBoardStore = defineStore('board', () => {
     start, stop, clearFilters, tasksIn, columnsFor, loadColumnsFor, columnNameOf, boardLabelOf, roleOfBoard, ticketBoardFor,
     addTask, saveTask, moveToBoard, removeTask, dropTask, syncState, addColumn, rename, updateColumnSettings, archiveColumn, moveColumn,
     taskCount, ownTaskCount, removeColumn, seedColumns,
+    bulkChange, bulkRemove, canChange, canRemove, setDue, addBlocker, removeBlocker, commentIndex, commentsLoading,
   }
 })

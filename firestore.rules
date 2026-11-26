@@ -163,12 +163,14 @@ service cloud.firestore {
         && canPlaceTask(request.resource.data)
         && workspaceStampOk(request.resource.data)
         && request.resource.data.get('activitySeq', 0) in [0, 1]
-        && request.resource.data.get('attachments', []).size() <= 30;
+        && request.resource.data.get('attachments', []).size() <= 30
+        && request.resource.data.get('blockedBy', []).size() <= 20;
 
       // Moving a task to another board needs the right to add tasks on BOTH boards (so a Super Private workspace stays closed).
       allow update: if hasProfile() && (isAdmin() || !changesLockedTaskField())
         && seqStepOk() && dueHistoryOk()
         && request.resource.data.get('attachments', []).size() <= 30
+        && request.resource.data.get('blockedBy', []).size() <= 20 // dependencies (26 Nov 2026)
         && (request.resource.data.boardId == resource.data.boardId || canPlaceTask(request.resource.data))
         && workspaceStampOk(request.resource.data)
         && (

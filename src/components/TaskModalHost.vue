@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 
 // Opens the task panel with what is right for THIS task: the columns and the role of the task's own board
 // (on the Main Board a task can belong to any workspace board).
-const props = defineProps({ editor: Object }) // a reactive(useTaskEditor())
+const props = defineProps({ editor: Object, defaultDue: { type: String, default: '' } }) // editor: a reactive(useTaskEditor()); defaultDue: Calendar day for a new task
 const board = useBoardStore()
 const auth = useAuthStore()
 
@@ -29,7 +29,7 @@ const destinations = computed(() => (board.aggregate || task.value ? board.desti
     :default-column-id="editor.modal.columnId" :default-department="auth.profile.departmentId"
     :can-delete="canDelete" :can-moderate="role === 'admin'" :readonly="readonly"
     :board-label="task ? board.boardLabelOf(task) : ''" :destinations="destinations" :current-board-id="board.boardId" :load-columns="board.loadColumnsFor"
-    :ticket-board-for="board.ticketBoardFor" :profile="auth.profile"
+    :ticket-board-for="board.ticketBoardFor" :profile="auth.profile" :default-due="task ? '' : defaultDue"
     @close="editor.close()" @create="editor.create" @save="editor.save" @delete="editor.remove" @move="editor.move"
   />
   </Transition>

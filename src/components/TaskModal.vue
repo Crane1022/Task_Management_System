@@ -6,6 +6,7 @@ import { toInput, fromInput } from '@/utils/dates'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { useUiStore } from '@/stores/ui'
 import TaskAttachments from './TaskAttachments.vue'
+import TaskDeps from './TaskDeps.vue'
 import RichText from './RichText.vue'
 import { toggleBold, toggleList, continueList } from '@/utils/richText'
 import DescriptionLinks from './DescriptionLinks.vue'
@@ -33,6 +34,7 @@ const props = defineProps({
   // (boardId) -> the board when it is a Maintenance board (a new task there is a PMS ticket), else null
   ticketBoardFor: { type: Function, default: () => null },
   profile: Object, // the signed-in person (for the PMS ticket fields)
+  defaultDue: { type: String, default: '' }, // "YYYY-MM-DD": a new task made from a Calendar day starts with that deadline
   // 24 Nov 2026: create / save / delete / move are taken as functions (still written @create, @save… by the parent)
   // so the panel can wait for them and show "Saving…" with a spinner until the write has finished
   onCreate: Function,
@@ -66,7 +68,7 @@ const form = ref({
   columnId: t?.columnId ?? props.defaultColumnId,
   assignedTo: [...(t?.assignedTo ?? [])],
   startDate: toInput(t?.startDate),
-  dueDate: toInput(t?.dueDate),
+  dueDate: t ? toInput(t.dueDate) : props.defaultDue,
   estimatedHours: t?.estimatedHours ?? '',
   labels: (t?.labels ?? []).join(', '),
   subtasks: (t?.subtasks ?? []).map((s) => ({ ...s })),
@@ -337,6 +339,7 @@ const doMove = (d, c) => runBusy('move', props.onMove, d, c)
         </div>
 
         <template v-if="t">
+          <TaskDeps :task="liveTask ?? t" :can-edit="!readonly" />
           <TaskAttachments :task-id="t.id" :attachments="(liveTask ?? t).attachments ?? []" :can-edit="!readonly" />
           <TaskMove v-if="!readonly" :destinations="destinations" :current-board-id="t.boardId" :load-columns="loadColumns" @move="doMove" />
           <TaskComments :task-id="t.id" :users="users" :can-comment="!readonly" :can-moderate="canModerate" :task="liveTask ?? t" />
@@ -358,7 +361,7 @@ const doMove = (d, c) => runBusy('move', props.onMove, d, c)
     <ConfirmDialog v-if="confirmDelete && ticketCard" :title="`Delete ticket ${t.pmsLink.id}?`"
       :message="`This removes the card here and deletes ${t.pmsLink.id} in the PMS too. The PMS keeps the ticket, marked deleted with your reason.`"
       reason-label="Reason for deleting" @cancel="confirmDelete = false" @confirm="doDelete" />
-    <ConfirmDialog v-else-if="confirmDelete" title="Delete this task?" message="This permanently removes the task for everyone. This cannot be undone."
+    <ConfirmDialog v-else-if="confirmDelete" title="Delete this task?" message="This removes the task for everyone. You can press Undo for a few seconds afterwards."
       @cancel="confirmDelete = false" @confirm="doDelete()" />
     <ConfirmDialog v-else-if="confirmLeave" title="Leave without saving?"
       :message="t ? 'You have changes in this task that are not saved. If you leave now, they will be lost.' : 'This new task has not been created yet. If you leave now, what you typed will be lost.'"

@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { friendlySentence } from '@/utils/errors'
+import { friendly } from '@/utils/errors'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
@@ -91,7 +93,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     unsubs = [
       svc.subscribeWorkspaces({ uid: auth.user.uid, isAdmin: auth.isAdmin }, (list) => {
         workspaces.value = list; loading.value = false; syncBoards(list)
-      }, (e) => { error.value = e.message; loading.value = false }),
+      }, (e) => { error.value = friendlySentence(e); loading.value = false }),
       svc.subscribeStars(auth.user.uid, (ids) => (stars.value = ids)),
       svc.subscribeLayout(auth.user.uid, (l) => (layout.value = l)),
     ]
@@ -104,7 +106,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function run(fn, msg) {
-    try { return await ui.track(fn) } catch (e) { console.error(e); ui.toast(`${msg}: ${e.code ?? e.message}`, 'error') }
+    try { return await ui.track(fn) } catch (e) { console.error(e); ui.toast(`${msg}: ${friendly(e)}`, 'error') }
   }
 
   const addWorkspace = (data) => run(async () => {
@@ -153,7 +155,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return true
     } catch (e) {
       if (e.code === 'board/not-empty') ui.toast('This board still has tasks. Move or delete them first.', 'error')
-      else { console.error(e); ui.toast(`Could not delete the board: ${e.code ?? e.message}`, 'error') }
+      else { console.error(e); ui.toast(`Could not delete the board: ${friendly(e)}`, 'error') }
       return false
     }
   }

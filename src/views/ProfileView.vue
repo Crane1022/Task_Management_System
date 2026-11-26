@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Camera, Trash2, Palette, LogOut, ShieldCheck, Info } from 'lucide-vue-next'
@@ -36,7 +37,7 @@ async function saveProfile() {
   try {
     await updateOwnProfile(auth.user.uid, { displayName: form.value.displayName.trim(), timezone: form.value.timezone, landingPage: form.value.landingPage })
     ui.toast('Profile saved')
-  } catch (e) { console.error(e); ui.toast(`Could not save: ${e.code ?? e.message}`, 'error') }
+  } catch (e) { console.error(e); ui.toast(`Could not save: ${friendly(e)}`, 'error') }
   savingProfile.value = false
 }
 
@@ -57,7 +58,7 @@ async function onPhoto(e) {
 async function removePhoto() {
   photoBusy.value = true
   try { await updateOwnProfile(auth.user.uid, { photo: deleteField() }); ui.toast('Photo removed') }
-  catch (err) { ui.toast(`Could not remove the photo: ${err.code ?? err.message}`, 'error') }
+  catch (err) { ui.toast(`Could not remove the photo: ${friendly(err)}`, 'error') }
   photoBusy.value = false
 }
 
@@ -65,7 +66,7 @@ async function removePhoto() {
 const pw = ref({ current: '', next: '', again: '' })
 const pwBusy = ref(false)
 const pwError = ref('')
-const friendly = (e) => ({
+const passwordError = (e) => ({
   'auth/wrong-password': 'The current password is not correct.',
   'auth/invalid-credential': 'The current password is not correct.',
   'auth/weak-password': 'Choose a stronger password.',
@@ -85,12 +86,12 @@ async function changePassword() {
     await updatePassword(u, pw.value.next)
     pw.value = { current: '', next: '', again: '' }
     ui.toast('Password changed')
-  } catch (e) { console.error(e); pwError.value = friendly(e) }
+  } catch (e) { console.error(e); pwError.value = passwordError(e) }
   pwBusy.value = false
 }
 async function sendReset() {
   try { await sendPasswordResetEmail(pmsAuth, me.value.email); ui.toast(`Reset link sent to ${me.value.email}`) }
-  catch (e) { ui.toast(friendly(e), 'error') }
+  catch (e) { ui.toast(passwordError(e), 'error') }
 }
 
 // ----- notification choices (saved now; delivery is not built yet) -----
@@ -105,7 +106,7 @@ onMounted(async () => {
 async function savePrefs() {
   prefsBusy.value = true
   try { await savePreferences(auth.user.uid, JSON.parse(JSON.stringify(prefs.value))); ui.toast('Notification choices saved') }
-  catch (e) { ui.toast(`Could not save: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not save: ${friendly(e)}`, 'error') }
   prefsBusy.value = false
 }
 
@@ -189,6 +190,7 @@ async function signOut() { await auth.logout(); router.push('/login') }
         <div class="flex flex-wrap items-center gap-2">
           <router-link to="/settings/appearance" class="btn-ghost"><Palette class="h-4 w-4" />Theme, colours and backgrounds</router-link>
           <button class="btn-ghost" @click="theme.toggleDark()">{{ ui.dark ? 'Switch to light mode' : 'Switch to dark mode' }}</button>
+          <button class="btn-ghost" @click="ui.tourOpen = true">Show the welcome tour again</button>
         </div>
         <label class="chk mt-3"><input type="checkbox" :checked="reduceMotion" @change="setReduceMotion($event.target.checked)" />Reduce motion (switches off animations, including the cats)</label>
       </section>

@@ -121,3 +121,31 @@ html.dark .glass-panel::before { background: linear-gradient(160deg, rgba(255, 2
 .status-swap-leave-active { transition: opacity calc(.14s * var(--motion)) ease, transform calc(.14s * var(--motion)) ease; }
 .status-swap-enter-from { opacity: 0; transform: translateY(4px); }
 .status-swap-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* ---------- 26 Nov 2026: Undo messages, ticks, calendar months, selection bar ---------- */
+/* the Undo message rises from the bottom; its thin bar shrinks while the delete waits */
+.undo-enter-active { transition: transform calc(.34s * var(--motion)) var(--ease-out), opacity .25s ease; }
+.undo-leave-active { transition: transform calc(.2s * var(--motion)) ease, opacity .2s ease; }
+.undo-enter-from, .undo-leave-to { opacity: 0; transform: translateY(24px); }
+.undo-bar { transform-origin: left; animation: undo-shrink linear both; }
+@keyframes undo-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+html.reduce-motion .undo-bar { animation: none !important; }
+/* a tick pops into a checkbox */
+.tick-pop { animation: tick-pop calc(.28s * var(--motion)) var(--ease-spring) both; }
+@keyframes tick-pop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: none; } }
+/* calendar: the next month slides in from the right, the previous one from the left */
+.month-next-enter-active, .month-prev-enter-active { transition: transform calc(.32s * var(--motion)) var(--ease-out), opacity calc(.28s * var(--motion)) ease; }
+.month-next-leave-active, .month-prev-leave-active { display: none; }
+.month-next-enter-from { opacity: 0; transform: translateX(28px); }
+.month-prev-enter-from { opacity: 0; transform: translateX(-28px); }
+/* the bar of actions for selected tasks rises from the bottom */
+.select-bar-enter-active { transition: transform calc(.32s * var(--motion)) var(--ease-out), opacity .25s ease; }
+.select-bar-leave-active { transition: transform calc(.2s * var(--motion)) ease, opacity .18s ease; }
+.select-bar-enter-from, .select-bar-leave-to { opacity: 0; transform: translateY(24px); }
+/* the sliding pill behind a two-way switch (Month / Week, List / Calendar) */
+.seg-pill { transition: transform calc(.26s * var(--motion)) var(--ease-out); }
+/* a card being dragged onto a calendar day */
+.day-drop { outline: 2px dashed var(--highlight); outline-offset: -2px; background-color: color-mix(in srgb, var(--highlight) 10%, var(--surface)) !important; }
+/* the offline banner's dot pulses */
+.pulse-dot { animation: pulse-dot calc(1.6s * var(--motion)) ease-out infinite; }
+@keyframes pulse-dot { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }

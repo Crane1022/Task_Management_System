@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 // Festive events (Directors only, 25 Nov 2026): the whole-company switches, and each special day's dates, outfit,
 // decorations, greetings, pop-up and audience (everyone, or only the people picked).
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
@@ -44,7 +45,7 @@ const savingPlace = ref(false)
 async function savePlace() {
   savingPlace.value = true
   try { await festive.saveSettings({ ...place.value, lat: +place.value.lat, lon: +place.value.lon, prayerZone: String(place.value.prayerZone).toUpperCase() }); ui.toast('Place saved') }
-  catch (e) { ui.toast(`Could not save: ${e.code ?? e.message}`, 'error') } finally { savingPlace.value = false }
+  catch (e) { ui.toast(`Could not save: ${friendly(e)}`, 'error') } finally { savingPlace.value = false }
 }
 
 const checking = ref(false)
@@ -68,7 +69,7 @@ const adding = ref(false)
 async function addSet() {
   adding.value = true
   try { const n = await festive.addStandardSet(); ui.toast(n ? `Added ${n} festivals. Set the dates of the ones marked “Needs date”.` : 'All the standard festivals are already here') }
-  catch (e) { ui.toast(`Could not add: ${e.code ?? e.message}`, 'error') } finally { adding.value = false }
+  catch (e) { ui.toast(`Could not add: ${friendly(e)}`, 'error') } finally { adding.value = false }
 }
 
 // ----- the editor -----
@@ -106,11 +107,11 @@ async function save() {
     const id = await festive.saveEvent(selectedId.value === 'new' ? null : selectedId.value, form.value)
     selectedId.value = id
     ui.toast('Event saved')
-  } catch (e) { ui.toast(`Could not save: ${e.code ?? e.message}`, 'error') } finally { saving.value = false }
+  } catch (e) { ui.toast(`Could not save: ${friendly(e)}`, 'error') } finally { saving.value = false }
 }
 const confirmDelete = ref(false)
 async function remove() {
-  try { await festive.removeEvent(selectedId.value); ui.toast('Event deleted'); selectedId.value = null; form.value = null } catch (e) { ui.toast(`Could not delete: ${e.code ?? e.message}`, 'error') }
+  try { await festive.removeEvent(selectedId.value); ui.toast('Event deleted'); selectedId.value = null; form.value = null } catch (e) { ui.toast(`Could not delete: ${friendly(e)}`, 'error') }
   confirmDelete.value = false
 }
 

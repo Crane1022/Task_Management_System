@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Paperclip, Plus, Trash2, FileText, FileSpreadsheet, Image as ImageIcon, Presentation, FileArchive, File as FileIcon, ExternalLink, Upload, Link2, Download, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -45,7 +46,7 @@ async function add() {
     url.value = ''; name.value = ''; open.value = false
     ui.toast('Attachment added')
   } catch (e) {
-    error.value = ['attachments/duplicate', 'attachments/limit'].includes(e.code) ? e.message : `Could not add the attachment: ${e.code ?? e.message}`
+    error.value = ['attachments/duplicate', 'attachments/limit'].includes(e.code) ? e.message : `Could not add the attachment: ${friendly(e)}`
   } finally { busy.value = false }
 }
 
@@ -73,7 +74,7 @@ async function uploadFiles(list) {
       await ui.track(() => uploadTaskFile(props.taskId, file, auth.profile, (p) => { row.progress = p }))
       ui.toast(`Uploaded ${row.name}`)
     } catch (e) {
-      ui.toast(e.code === 'attachments/limit' ? e.message : `Could not upload ${row.name}: ${e.code ?? e.message}`, 'error')
+      ui.toast(e.code === 'attachments/limit' ? e.message : `Could not upload ${row.name}: ${friendly(e)}`, 'error')
     } finally {
       uploads.value = uploads.value.filter((u) => u.key !== row.key)
     }
@@ -118,13 +119,13 @@ async function openFile(a) {
     else saveBlob(blob, a.name)
   } catch (e) {
     tab?.close()
-    ui.toast(e.message && e.code?.startsWith('file/') ? e.message : `Could not open ${a.name}: ${e.code ?? e.message}`, 'error')
+    ui.toast(e.message && e.code?.startsWith('file/') ? e.message : `Could not open ${a.name}: ${friendly(e)}`, 'error')
   } finally { opening.value = null }
 }
 async function download(a) {
   opening.value = a.id
   try { saveBlob(await ui.track(() => loadTaskFile(props.taskId, a)), a.name) }
-  catch (e) { ui.toast(`Could not download ${a.name}: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not download ${a.name}: ${friendly(e)}`, 'error') }
   finally { opening.value = null }
 }
 function closeViewer() { if (viewer.value) URL.revokeObjectURL(viewer.value.url); viewer.value = null }
@@ -140,7 +141,7 @@ async function remove() {
     await ui.track(() => removeAttachment(props.taskId, a.id, auth.profile))
     if (isUpload(a)) deleteTaskFile(props.taskId, a.fileId) // an uploaded file is deleted for good
     ui.toast('Attachment removed')
-  } catch (e) { ui.toast(e.code === 'attachments/gone' ? e.message : `Could not remove it: ${e.code ?? e.message}`, 'error') }
+  } catch (e) { ui.toast(e.code === 'attachments/gone' ? e.message : `Could not remove it: ${friendly(e)}`, 'error') }
 }
 </script>
 

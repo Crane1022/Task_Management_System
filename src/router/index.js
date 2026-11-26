@@ -11,6 +11,8 @@ const router = createRouter({
     { path: '/board', name: 'board', component: () => import('@/views/BoardView.vue'), meta: { tasks: true } },
     { path: '/my-tasks', name: 'my-tasks', component: () => import('@/views/BoardView.vue'), props: { mine: true }, meta: { tasks: true } },
     { path: '/list', name: 'list', component: () => import('@/views/ListView.vue'), meta: { tasks: true } },
+    // 26 Nov 2026: tasks by deadline, a month or a week at a time
+    { path: '/calendar', name: 'calendar', component: () => import('@/views/CalendarView.vue'), meta: { tasks: true } },
     // Workspaces: each one holds boards. meta.tab picks the tab; meta.page is the key used for per-page themes.
     { path: '/workspaces/:wid', name: 'workspace', component: () => import('@/views/WorkspaceView.vue'), meta: { tab: 'boards', page: 'workspace' } },
     { path: '/workspaces/:wid/members', name: 'workspace-members', component: () => import('@/views/WorkspaceView.vue'), meta: { tab: 'members', page: 'workspace' } },

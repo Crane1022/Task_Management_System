@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch } from 'vue'
 import router from '@/router'
 import { useAuthStore } from './auth'
@@ -48,7 +49,7 @@ export const useThemeStore = defineStore('theme', () => {
       return true
     } catch (e) {
       console.error(e)
-      ui.toast(`Could not save your appearance settings: ${e.code ?? e.message}`, 'error')
+      ui.toast(`Could not save your appearance settings: ${friendly(e)}`, 'error')
       return false
     }
   }

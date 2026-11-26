@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Users, MessageCircle, Plus, Settings2, Hash } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -57,7 +58,7 @@ async function makeGroup() {
   if (problem) { ui.toast(problem, 'error'); return }
   busy.value = true
   try { selected.value = await createChat(wid.value, { type: 'group', name: name.value, memberIds: ids }, auth.profile); panel.value = ''; ui.toast('Group created') }
-  catch (e) { ui.toast(`Could not create the group: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not create the group: ${friendly(e)}`, 'error') }
   busy.value = false
 }
 async function startDm(u) {
@@ -65,7 +66,7 @@ async function startDm(u) {
   panel.value = ''
   if (chats.value.some((c) => c.id === id)) { selected.value = id; return }
   try { selected.value = await createChat(wid.value, { type: 'dm', memberIds: [me.value, u.id] }, auth.profile, id) }
-  catch (e) { ui.toast(`Could not start the chat: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not start the chat: ${friendly(e)}`, 'error') }
 }
 async function saveGroup() {
   const ids = [me.value, ...chosen.value]
@@ -73,7 +74,7 @@ async function saveGroup() {
   if (problem) { ui.toast(problem, 'error'); return }
   busy.value = true
   try { await updateChat(wid.value, current.value.id, { name: name.value.trim(), memberIds: ids }); panel.value = ''; ui.toast('Group updated') }
-  catch (e) { ui.toast(`Could not update the group: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not update the group: ${friendly(e)}`, 'error') }
   busy.value = false
 }
 const confirmDelete = ref(false)
@@ -81,7 +82,7 @@ async function removeGroup() {
   confirmDelete.value = false
   const id = current.value.id
   try { await deleteConversation(wid.value, id); selected.value = ''; panel.value = ''; ui.toast('Group deleted') }
-  catch (e) { ui.toast(`Could not delete the group: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not delete the group: ${friendly(e)}`, 'error') }
 }
 </script>
 

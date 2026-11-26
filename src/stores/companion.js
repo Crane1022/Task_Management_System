@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { friendly } from '@/utils/errors'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from './auth'
 import { useUiStore } from './ui'
@@ -89,7 +90,7 @@ export const useCompanionStore = defineStore('companion', () => {
       return true
     } catch (e) {
       console.error(e)
-      ui.toast(`Could not save your companion: ${e.code ?? e.message}`, 'error')
+      ui.toast(`Could not save your companion: ${friendly(e)}`, 'error')
       return false
     }
   }
@@ -105,7 +106,7 @@ export const useCompanionStore = defineStore('companion', () => {
       apply(fresh)
       return true
     } catch (e) {
-      ui.toast(`Could not reset: ${e.code ?? e.message}`, 'error')
+      ui.toast(`Could not reset: ${friendly(e)}`, 'error')
       return false
     }
   }

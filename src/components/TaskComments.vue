@@ -1,4 +1,5 @@
 <script setup>
+import { friendly } from '@/utils/errors'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { MessageSquare, Pencil, Trash2, Send } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -83,7 +84,7 @@ async function post() {
     if (props.task) notify.commentPosted(props.task, t, mentions, props.users, taskWs.value) // best effort; never blocks the comment
     text.value = ''; picked.value = []
   }
-  catch (e) { ui.toast(`Could not post the comment: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not post the comment: ${friendly(e)}`, 'error') }
   busy.value = false
 }
 function startEdit(c) { editingId.value = c.id; editText.value = c.text }
@@ -93,13 +94,13 @@ async function saveEdit(c) {
   if (!t || savingEdit.value) return
   savingEdit.value = true
   try { await editComment(props.taskId, c.id, t); editingId.value = '' }
-  catch (e) { ui.toast(`Could not save the change: ${e.code ?? e.message}`, 'error') }
+  catch (e) { ui.toast(`Could not save the change: ${friendly(e)}`, 'error') }
   finally { savingEdit.value = false }
 }
 async function remove() {
   const c = removing.value
   removing.value = null
-  try { await deleteComment(props.taskId, c.id) } catch (e) { ui.toast(`Could not delete the comment: ${e.code ?? e.message}`, 'error') }
+  try { await deleteComment(props.taskId, c.id) } catch (e) { ui.toast(`Could not delete the comment: ${friendly(e)}`, 'error') }
 }
 </script>
 

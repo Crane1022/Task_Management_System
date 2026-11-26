@@ -42,6 +42,30 @@ export const useUiStore = defineStore('ui', () => {
   }
   const requestNewTask = () => newTaskTick.value++
 
+  // ----- Undo (26 Nov 2026): a delete waits a few seconds before it really happens, with an Undo button meanwhile -----
+  // undoable({ message, commit, undo, ms }): `undo()` puts things back on screen; `commit()` does the real delete.
+  // Leaving or closing the page does the pending deletes straight away, so nothing is left half done.
+  const undos = ref([])
+  const pendingCommits = new Map()
+  function undoable({ message, commit, undo, ms = 6000 }) {
+    const id = Date.now() + Math.random()
+    const finish = async () => {
+      pendingCommits.delete(id)
+      undos.value = undos.value.filter((u) => u.id !== id)
+      try { await commit() } catch (e) { console.error(e); undo?.(); toast(`${message.replace(/\.$/, '')} — could not be completed, so it was put back`, 'error') }
+    }
+    const timer = setTimeout(finish, ms)
+    pendingCommits.set(id, () => { clearTimeout(timer); finish() })
+    undos.value = [...undos.value, {
+      id, message, ms,
+      undo: () => { clearTimeout(timer); pendingCommits.delete(id); undos.value = undos.value.filter((u) => u.id !== id); undo?.(); toast('Put back') },
+    }]
+  }
+  window.addEventListener('pagehide', () => [...pendingCommits.values()].forEach((run) => run()))
+
+  // the first-time tour (TourDialog); Profile & settings can open it again
+  const tourOpen = ref(false)
+
   // ----- loading bar (25 Nov 2026): anything that saves, sends or loads can run through track() and the thin
   // bar at the top of the screen moves until it is done. Page changes (router) use it too.
   const pending = ref(0)
@@ -52,5 +76,5 @@ export const useUiStore = defineStore('ui', () => {
   const busy = computed(() => pending.value > 0)
   const navigating = ref(false) // a page is opening (its code and first data load); set by the router
 
-  return { activeBoardId, setActiveBoard, newTaskTick, requestNewTask, dark, collapsed, mobileNav, toasts, toggleCollapsed, toast, isPhone, isMid, midOpen, rail, pending, busy, track, navigating }
+  return { activeBoardId, setActiveBoard, newTaskTick, requestNewTask, dark, collapsed, mobileNav, toasts, toggleCollapsed, toast, isPhone, isMid, midOpen, rail, pending, busy, track, navigating, undos, undoable, tourOpen }
 })

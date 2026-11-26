@@ -1,4 +1,6 @@
 <script setup>
+import { friendlySentence } from '@/utils/errors'
+import { friendly } from '@/utils/errors'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Info, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -39,7 +41,7 @@ function syncDepartments(list) {
 
 let unsub
 onMounted(() => {
-  unsub = subscribeUsers((u) => { users.value = u; loading.value = false; syncDepartments(u) }, (e) => { error.value = e.message; loading.value = false })
+  unsub = subscribeUsers((u) => { users.value = u; loading.value = false; syncDepartments(u) }, (e) => { error.value = friendlySentence(e); loading.value = false })
 })
 onUnmounted(() => unsub?.())
 
@@ -74,7 +76,7 @@ async function change(u, field, value) {
     ui.toast(`${u.name}: ${{ role: 'role' }[field]} saved`)
   } catch (e) {
     console.error(e)
-    ui.toast(`Could not save: ${e.code ?? e.message}`, 'error')
+    ui.toast(`Could not save: ${friendly(e)}`, 'error')
   } finally {
     saving.value = ''
   }
