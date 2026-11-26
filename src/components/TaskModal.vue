@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { X, Plus, Trash2, Bold, List, ListOrdered, ArrowLeft } from 'lucide-vue-next'
+import { X, Plus, Trash2, Bold, List, ListOrdered, ArrowLeft, Pencil } from 'lucide-vue-next'
 import { PRIORITIES, pickableDepartments, deptName, displayOf } from '@/utils/constants'
 import { toInput, fromInput } from '@/utils/dates'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -175,7 +175,8 @@ function onBackdropClick(e) {
 // Esc: closes an open question first (= keep editing), otherwise tries to close the panel
 function onKey(e) {
   if (e.key !== 'Escape' || busy.value) return
-  if (confirmLeave.value) confirmLeave.value = false
+  if (editingSub.value) editingSub.value = '' // Esc while editing a checklist item only stops the editing
+  else if (confirmLeave.value) confirmLeave.value = false
   else if (confirmDelete.value) confirmDelete.value = false
   else requestClose()
 }
@@ -191,6 +192,24 @@ onUnmounted(() => { document.removeEventListener('keydown', onKey); window.remov
 const userList = computed(() => Object.values(props.users).sort((a, b) => a.name.localeCompare(b.name)))
 const done = computed(() => form.value.subtasks.filter((s) => s.done).length)
 const progress = computed(() => (form.value.subtasks.length ? Math.round((done.value / form.value.subtasks.length) * 100) : 0))
+
+// ----- editing a checklist item (26 Nov 2026): click its text or the pencil, change it, Enter (or click away) to keep,
+// Esc to undo. Like every other field it is saved with "Save changes".
+const editingSub = ref('') // the id of the item being edited
+const subDraft = ref('')
+function editSub(s) {
+  if (props.readonly) return
+  editingSub.value = s.id
+  subDraft.value = s.title
+  nextTick(() => { const el = document.getElementById(`sub-edit-${s.id}`); el?.focus(); el?.select() })
+}
+function keepSub(s) {
+  if (editingSub.value !== s.id) return
+  const title = subDraft.value.trim()
+  if (title) s.title = title // an emptied item keeps its old text; use the bin to remove it
+  editingSub.value = ''
+}
+function cancelSub() { editingSub.value = '' }
 
 function addSub() {
   const title = newSub.value.trim()
@@ -328,8 +347,11 @@ const doMove = (d, c) => runBusy('move', props.onMove, d, c)
           <ul class="space-y-1">
             <li v-for="(s, i) in form.subtasks" :key="s.id" class="flex items-center gap-2">
               <input v-model="s.done" type="checkbox" class="accent-[var(--accent)]" :aria-label="s.title" />
-              <span class="flex-1 text-sm" :class="s.done && 'text-muted line-through'">{{ s.title }}</span>
-              <button type="button" class="text-muted hover:text-red-600" aria-label="Remove item" @click="form.subtasks.splice(i, 1)"><Trash2 class="h-4 w-4" /></button>
+              <input v-if="editingSub === s.id" :id="`sub-edit-${s.id}`" v-model="subDraft" class="input min-w-0 flex-1 py-1 text-sm" :aria-label="`Edit checklist item: ${s.title}`" maxlength="200"
+                @keydown.enter.prevent="keepSub(s)" @keydown.esc.stop.prevent="cancelSub" @blur="keepSub(s)" />
+              <button v-else type="button" class="min-w-0 flex-1 rounded px-1 py-0.5 text-left text-sm transition-colors hover:bg-bg disabled:hover:bg-transparent" :class="s.done && 'text-muted line-through'" :disabled="readonly" :title="readonly ? null : 'Click to edit'" @click="editSub(s)">{{ s.title }}</button>
+              <button v-if="!readonly && editingSub !== s.id" type="button" class="text-muted hover:text-accent" :aria-label="`Edit ${s.title}`" @click="editSub(s)"><Pencil class="h-4 w-4" /></button>
+              <button type="button" class="text-muted hover:text-red-600" aria-label="Remove item" @mousedown.prevent @click="form.subtasks.splice(i, 1); editingSub = ''"><Trash2 class="h-4 w-4" /></button>
             </li>
           </ul>
           <div class="mt-2 flex gap-2">
